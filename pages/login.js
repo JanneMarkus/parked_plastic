@@ -1,85 +1,179 @@
-import { useEffect } from "react";
+// pages/login.js
+import { useEffect, useMemo, useState } from "react";
+import Head from "next/head";
 import { useRouter } from "next/router";
 import { supabase } from "@/lib/supabaseClient";
 
+function sanitizeRedirectPath(raw) {
+  if (typeof raw !== "string") return "/";
+  // Disallow protocol/host and scheme-relative URLs to prevent open-redirects.
+  if (raw.startsWith("//")) return "/";
+  if (/^[a-zA-Z]+:\/\//.test(raw)) return "/";
+  return raw.startsWith("/") ? raw : "/";
+}
+
 export default function Login() {
   const router = useRouter();
-  const nextPath = typeof router.query.redirect === "string" ? router.query.redirect : "/";
+  const rawRedirect = typeof router.query.redirect === "string" ? router.query.redirect : "/";
+  const nextPath = useMemo(() => sanitizeRedirectPath(rawRedirect), [rawRedirect]);
 
+  const [checking, setChecking] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // If already signed in, bounce to nextPath.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) router.replace(nextPath);
-    });
+    let active = true;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (!active) return;
+        if (data?.user) router.replace(nextPath);
+      } catch (e) {
+        // non-fatal; show login UI
+      } finally {
+        if (active) setChecking(false);
+      }
+    })();
+    return () => { active = false; };
   }, [nextPath, router]);
 
   const signInWithGoogle = async () => {
-    const redirectTo =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/login?redirect=${encodeURIComponent(nextPath)}`
-        : undefined;
+    setErrorMsg("");
+    setSubmitting(true);
+    try {
+      const origin =
+        typeof window !== "undefined" && window.location?.origin
+          ? window.location.origin
+          : undefined;
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo },
-    });
-    if (error) alert(error.message);
+      const redirectTo =
+        origin != null
+          ? `${origin}/login?redirect=${encodeURIComponent(nextPath)}`
+          : undefined;
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo },
+      });
+      if (error) throw error;
+      // On success, Supabase will redirect; no further action here.
+    } catch (e) {
+      setErrorMsg(e?.message || "Sign-in failed. Please try again.");
+      setSubmitting(false);
+    }
   };
 
   return (
-    <main
-      style={{
-        maxWidth: 420,
-        margin: "48px auto",
-        background: "#fff",
-        padding: 24,
-        borderRadius: 12,
-        boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
-      }}
-    >
-      <h1 style={{ fontFamily: "'Poppins', sans-serif", color: "#141B4D", marginTop: 0 }}>
-        Sign in to Parked Plastic
-      </h1>
-      <p style={{ color: "#3A3A3A" }}>
-        Use Google to continue. You’ll be redirected back to <code>{nextPath}</code>.
-      </p>
+    <main className="wrap">
+      <Head>
+        <title>Sign in — Parked Plastic</title>
+        <meta name="description" content="Sign in to Parked Plastic using your Google account." />
+        <meta name="robots" content="noindex" />
+      </Head>
 
-      <button
-        onClick={signInWithGoogle}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          width: "100%",
-          background: "#279989",
-          color: "#fff",
-          border: "none",
-          borderRadius: 8,
-          padding: "12px 16px",
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1E7A6F")}
-        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#279989")}
-      >
-        <span
-          aria-hidden
-          style={{
-            background: "#fff",
-            color: "#279989",
-            borderRadius: 4,
-            padding: 6,
-            fontWeight: 800,
-            lineHeight: 1,
-          }}
+      <style jsx>{styles}</style>
+
+      <div className="card" role="region" aria-labelledby="login-title">
+        <h1 id="login-title">Sign in to Parked Plastic</h1>
+        <p className="lead">
+          Use Google to continue. You’ll be redirected back to <code className="pill">{nextPath}</code>.
+        </p>
+
+        {/* Status */}
+        <div aria-live="polite" aria-atomic="true" className="status">
+          {checking && <div className="info">Checking your session…</div>}
+          {errorMsg && <div className="error">{errorMsg}</div>}
+        </div>
+
+        <button
+          className="btn btn-primary"
+          onClick={signInWithGoogle}
+          disabled={submitting || checking}
+          aria-busy={submitting}
         >
-          G
-        </span>
-        Sign in with Google
-      </button>
-
-      <p style={{ fontSize: 12, color: "#555", marginTop: 12 }}>
-        Make sure Google is enabled in Supabase Auth providers and the redirect URL is set.
-      </p>
+          <span className="gBadge" aria-hidden>G</span>
+          {submitting ? "Redirecting…" : "Sign in with Google"}
+        </button>
+      </div>
     </main>
   );
 }
+
+/* ---- Styled-JSX: brand tokens + mobile-first ---- */
+const styles = `
+  :root {
+    --storm: #141B4D;   /* Primary Dark */
+    --teal: #279989;    /* Primary Accent */
+    --teal-dark: #1E7A6F;
+    --sea: #F8F7EC;     /* Background */
+    --char: #3A3A3A;    /* Neutral Text */
+    --cloud: #E9E9E9;   /* Borders */
+    --tint: #ECF6F4;    /* Focus glow */
+  }
+
+  .wrap { max-width: 480px; margin: 48px auto 90px; padding: 0 12px; background: var(--sea); }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--cloud);
+    border-radius: 14px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    padding: 22px;
+  }
+
+  h1 {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    letter-spacing: .5px;
+    color: var(--storm);
+    margin: 0 0 8px;
+    font-size: 1.6rem;
+  }
+
+  .lead { color: var(--char); margin: 0 0 14px; }
+  .pill {
+    display: inline-block;
+    background: #fff;
+    border: 1px solid var(--cloud);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: .9rem;
+  }
+
+  .status { min-height: 24px; margin-bottom: 10px; }
+  .info, .error {
+    border-radius: 10px; padding: 10px 12px; font-size: .95rem; margin: 8px 0 0;
+  }
+  .info { background: #f4fff9; border: 1px solid #d1f5e5; color: #1a6a58; }
+  .error { background: #fff5f4; border: 1px solid #ffd9d5; color: #8c2f28; }
+
+  .btn {
+    width: 100%;
+    border: none; border-radius: 10px; padding: 12px 16px;
+    font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    gap: 10px; font-size: 15px;
+  }
+  .btn:focus { outline: none; box-shadow: 0 0 0 4px var(--tint); }
+  .btn-primary { background: var(--teal); color: #fff; }
+  .btn-primary:hover { background: var(--teal-dark); }
+  .btn-primary[disabled] { opacity: .8; cursor: default; }
+
+  .gBadge {
+    background: #fff;
+    color: var(--teal);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .hint {
+    font-size: 12px; color: #555; margin-top: 12px;
+  }
+
+  @media (min-width: 768px) {
+    h1 { font-size: 1.8rem; }
+    .wrap { padding: 0 16px; }
+  }
+`;
