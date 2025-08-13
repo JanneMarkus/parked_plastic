@@ -15,15 +15,15 @@ export default function CreateListing() {
   const [brand, setBrand] = useState("");
   const [mold, setMold] = useState("");
   const [plastic, setPlastic] = useState("");
-  const [weight, setWeight] = useState(""); // optional -> stored as NULL if blank
   const [condition, setCondition] = useState("");
+  const [weight, setWeight] = useState(""); // optional -> NULL if blank
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // -------- Auth check --------
+  // ---------- Auth ----------
   useEffect(() => {
     let active = true;
     (async () => {
@@ -39,7 +39,7 @@ export default function CreateListing() {
     return () => sub?.subscription?.unsubscribe?.();
   }, []);
 
-  // -------- Image previews --------
+  // ---------- Image previews ----------
   useEffect(() => {
     return () => previews.forEach((u) => URL.revokeObjectURL(u));
   }, [previews]);
@@ -76,6 +76,7 @@ export default function CreateListing() {
         const url = await uploadToBucket(f, currentUser.id);
         if (url) image_urls.push(url);
       }
+
       // Parse optionals
       const weightNum = weight.trim() === "" ? null : Number(weight);
       const priceNum = price.trim() === "" ? null : Number(price);
@@ -85,8 +86,8 @@ export default function CreateListing() {
         brand: brand || null,
         mold: mold || null,
         plastic: plastic || null,
-        weight: Number.isFinite(weightNum) ? weightNum : null,
         condition: condition || null,
+        weight: Number.isFinite(weightNum) ? weightNum : null,
         price: Number.isFinite(priceNum) ? priceNum : null,
         description: description || null,
         image_urls,
@@ -108,12 +109,13 @@ export default function CreateListing() {
 
   const canSubmit = useMemo(() => title.trim().length > 0 && !loading, [title, loading]);
 
+  // ---------- UI ----------
   if (checking) {
     return (
       <main className="wrap">
         <p className="center muted">Checking session…</p>
         <style jsx>{`
-          .wrap { max-width: 1120px; margin: 32px auto; padding: 0 16px; }
+          .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
           .center { text-align: center; margin-top: 40px; }
           .muted { color: #3A3A3A; opacity: .85; }
         `}</style>
@@ -150,9 +152,10 @@ export default function CreateListing() {
 
       <div className="card">
         <form onSubmit={handleSubmit}>
-          <div className="grid">
-            {/* Title */}
-            <div className="field span-12">
+          {/* Strict 2-col grid. Every row is ordered and predictable */}
+          <div className="grid2">
+            {/* Row 1: Title (span 2) */}
+            <div className="field span2">
               <label htmlFor="title">Title*</label>
               <input
                 id="title"
@@ -163,8 +166,8 @@ export default function CreateListing() {
               />
             </div>
 
-            {/* Brand / Mold */}
-            <div className="field span-6">
+            {/* Row 2: Brand | Mold */}
+            <div className="field">
               <label htmlFor="brand">Brand</label>
               <input
                 id="brand"
@@ -173,7 +176,7 @@ export default function CreateListing() {
                 placeholder="Innova, Discraft, MVP…"
               />
             </div>
-            <div className="field span-6">
+            <div className="field">
               <label htmlFor="mold">Mold</label>
               <input
                 id="mold"
@@ -183,8 +186,8 @@ export default function CreateListing() {
               />
             </div>
 
-            {/* Plastic / Weight / Condition */}
-            <div className="field span-4">
+            {/* Row 3: Plastic | Condition */}
+            <div className="field">
               <label htmlFor="plastic">Plastic</label>
               <input
                 id="plastic"
@@ -193,7 +196,18 @@ export default function CreateListing() {
                 placeholder="Star, Z, Neutron…"
               />
             </div>
-            <div className="field span-4">
+            <div className="field">
+              <label htmlFor="condition">Condition</label>
+              <input
+                id="condition"
+                value={condition}
+                onChange={(e) => setCondition(e.target.value)}
+                placeholder="Like New, Excellent, Good…"
+              />
+            </div>
+
+            {/* Row 4: Weight | Price */}
+            <div className="field">
               <label htmlFor="weight">Weight (g) <span className="hint">(optional)</span></label>
               <input
                 id="weight"
@@ -205,18 +219,7 @@ export default function CreateListing() {
                 onChange={(e) => setWeight(e.target.value)}
               />
             </div>
-            <div className="field span-4">
-              <label htmlFor="condition">Condition</label>
-              <input
-                id="condition"
-                value={condition}
-                onChange={(e) => setCondition(e.target.value)}
-                placeholder="Like New, Excellent, Good…"
-              />
-            </div>
-
-            {/* Price / Description */}
-            <div className="field span-4">
+            <div className="field">
               <label htmlFor="price">Price (CAD)</label>
               <input
                 id="price"
@@ -228,7 +231,9 @@ export default function CreateListing() {
                 onChange={(e) => setPrice(e.target.value)}
               />
             </div>
-            <div className="field span-8">
+
+            {/* Row 5: Description (span 2) */}
+            <div className="field span2">
               <label htmlFor="description">Description</label>
               <textarea
                 id="description"
@@ -239,9 +244,9 @@ export default function CreateListing() {
               />
             </div>
 
-            {/* Images */}
-            <div className="field span-12">
-              <label>Images</label>
+            {/* Row 6: Images (span 2) */}
+            <div className="field span2">
+              <label htmlFor="images">Images</label>
               <div className="uploader">
                 <input
                   id="images"
@@ -251,6 +256,7 @@ export default function CreateListing() {
                   onChange={handleFileChange}
                 />
               </div>
+
               {previews.length > 0 && (
                 <>
                   <div className="previews">
@@ -260,13 +266,13 @@ export default function CreateListing() {
                       </div>
                     ))}
                   </div>
-                  <p className="hintRow">Tip: Use clear 4:3 photos on a clean background.</p>
+                  <p className="hintRow">Tip: Clear 4:3 photos on a clean background look best.</p>
                 </>
               )}
             </div>
 
-            {/* Actions */}
-            <div className="actions span-12">
+            {/* Row 7: Actions (span 2) */}
+            <div className="actions span2">
               <button type="button" className="btn btn-ghost" onClick={() => router.push("/")}>
                 Cancel
               </button>
@@ -281,7 +287,7 @@ export default function CreateListing() {
   );
 }
 
-/* ---- Styled-JSX: crisp, brand-aligned ---- */
+/* ---- Styled-JSX: strict 2-column grid, brand colors ---- */
 const styles = `
   :root {
     --storm: #141B4D;         /* Primary Dark */
@@ -294,7 +300,7 @@ const styles = `
     --tint: #ECF6F4;          /* Accent Tint */
   }
 
-  .wrap { max-width: 1120px; margin: 32px auto 80px; padding: 0 16px; }
+  .wrap { max-width: 960px; margin: 32px auto 80px; padding: 0 16px; }
 
   .titleRow {
     display: flex; align-items: baseline; justify-content: space-between;
@@ -314,17 +320,13 @@ const styles = `
     padding: 22px;
   }
 
-  form { margin: 0; }
-
-  .grid {
+  /* Strict 2-column grid */
+  .grid2 {
     display: grid;
-    grid-template-columns: repeat(12, 1fr);
-    gap: 16px;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 16px;
   }
-  .span-12 { grid-column: span 12; }
-  .span-8 { grid-column: span 8; }
-  .span-6 { grid-column: span 6; }
-  .span-4 { grid-column: span 4; }
+  .span2 { grid-column: 1 / -1; }
 
   .field label {
     display: block;
@@ -400,9 +402,7 @@ const styles = `
   .btn-ghost { background: #fff; color: var(--storm); border: 2px solid var(--storm); }
   .btn-ghost:hover { background: var(--storm); color: #fff; }
 
-  @media (max-width: 900px) {
-    .span-8 { grid-column: span 12; }
-    .span-6 { grid-column: span 12; }
-    .span-4 { grid-column: span 12; }
+  @media (max-width: 760px) {
+    .grid2 { grid-template-columns: 1fr; }
   }
 `;

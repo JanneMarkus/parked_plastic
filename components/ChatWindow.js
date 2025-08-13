@@ -2,199 +2,177 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function ChatWindow({ currentUserId, otherUserId, listingId }) {
-  const [loading, setLoading] = useState(true);
+/**
+ * Use it 2 ways:
+ *  - <ChatWindow otherUserId="..." listingId="...optional..." />
+ *  - <ChatWindow threadId="..." />  (opens an existing thread)
+ */
+export default function ChatWindow({ otherUserId = null, listingId = null, threadId: threadIdProp = null }) {
+  const [me, setMe] = useState(null);
+  const [threadId, setThreadId] = useState(threadIdProp);
   const [messages, setMessages] = useState([]);
-  const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
-  const scrollerRef = useRef(null);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const endRef = useRef(null);
 
-  // Guard: listingId is required per your DB schema
-  if (!listingId) {
-    return <p style={{ color: "#E86A5E" }}>Chat requires a listing. (listingId is missing)</p>;
-  }
-
-  // Initial fetch
+  // Auth
   useEffect(() => {
-    let active = true;
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setMe(data?.session?.user ?? null);
+    })();
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setMe(session?.user ?? null));
+    return () => sub?.subscription?.unsubscribe?.();
+  }, []);
+
+  // Find or create thread if needed
+  useEffect(() => {
+    if (!me) return;
+    let cancelled = false;
+
+    async function ensureThread() {
+      if (threadIdProp) {
+        setThreadId(threadIdProp);
+        return;
+      }
+      if (!otherUserId) return;
+
+      // Try to find existing
+      const { data: existing, error: findErr } = await supabase
+        .from("threads")
+        .select("id")
+        .or(`and(a.eq.${me.id},b.eq.${otherUserId}),and(a.eq.${otherUserId},b.eq.${me.id})`)
+        .eq("listing_id", listingId ?? null)
+        .limit(1)
+        .maybeSingle();
+
+      if (findErr) console.error(findErr);
+      if (existing?.id) {
+        if (!cancelled) setThreadId(existing.id);
+        return;
+      }
+
+      // Create new
+      const payload = { a: me.id, b: otherUserId, listing_id: listingId ?? null };
+      const { data: created, error: insErr } = await supabase.from("threads").insert(payload).select("id").single();
+      if (insErr) {
+        console.error(insErr);
+        return;
+      }
+      if (!cancelled) setThreadId(created.id);
+    }
+
+    ensureThread();
+    return () => { cancelled = true; };
+  }, [me, otherUserId, listingId, threadIdProp]);
+
+  // Load messages + realtime
+  useEffect(() => {
+    if (!threadId) return;
+    let cancelled = false;
+    let channel;
+
     (async () => {
       setLoading(true);
-      try {
-        const pair = `and(from_user.eq.${currentUserId},to_user.eq.${otherUserId}),and(from_user.eq.${otherUserId},to_user.eq.${currentUserId})`;
-        const { data, error } = await supabase
-          .from("messages")
-          .select("*")
-          .eq("listing_id", listingId)
-          .or(pair)
-          .order("created_at", { ascending: true });
-
-        if (error) throw error;
-        if (active) setMessages(data || []);
-      } catch (e) {
-        console.error(e);
-        if (active) setMessages([]);
-      } finally {
-        if (active) setLoading(false);
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("thread_id", threadId)
+        .order("created_at", { ascending: true });
+      if (!cancelled) {
+        if (error) console.error(error);
+        setMessages(data || []);
+        setLoading(false);
+        scrollToEnd();
       }
+
+      // realtime sub
+      channel = supabase
+        .channel(`thread-${threadId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "messages", filter: `thread_id=eq.${threadId}` },
+          (payload) => {
+            setMessages((prev) => [...prev, payload.new]);
+            scrollToEnd();
+          }
+        )
+        .subscribe();
     })();
 
-    return () => { active = false; };
-  }, [currentUserId, otherUserId, listingId]);
-
-  // Realtime subscription
-  useEffect(() => {
-    if (!currentUserId || !otherUserId || !listingId) return;
-    const channel = supabase
-      .channel(`messages-${listingId}-${currentUserId}-${otherUserId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `listing_id=eq.${listingId}` },
-        (payload) => {
-          const m = payload.new;
-          // only append if this row belongs to this conversation pair
-          const inPair =
-            (m.from_user === currentUserId && m.to_user === otherUserId) ||
-            (m.from_user === otherUserId && m.to_user === currentUserId);
-          if (inPair) {
-            setMessages((prev) => [...prev, m]);
-          }
-        }
-      )
-      .subscribe();
-
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
     };
-  }, [currentUserId, otherUserId, listingId]);
+  }, [threadId]);
 
-  // Auto-scroll to last message
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  function scrollToEnd() {
+    setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 20);
+  }
 
   async function sendMessage(e) {
     e.preventDefault();
-    if (sending) return;
-    const text = body.trim();
-    if (!text) return;
-
-    setSending(true);
+    const body = text.trim();
+    if (!body || !me || !threadId) return;
+    setText("");
     const { error } = await supabase.from("messages").insert({
-      listing_id: listingId,
-      from_user: currentUserId,
-      to_user: otherUserId,
-      body: text,
+      thread_id: threadId,
+      sender: me.id,
+      body
     });
-    setSending(false);
     if (error) {
-      alert("Failed to send: " + error.message);
-      return;
+      console.error(error);
+      alert("Failed to send message: " + error.message);
     }
-    setBody("");
   }
 
   return (
     <div className="chat">
       <style jsx>{`
-        .chat {
-          display: grid;
-          grid-template-rows: 1fr auto;
-          border: 1px solid #E9E9E9;
-          border-radius: 12px;
-          overflow: hidden;
-        }
-        .list {
-          background: #FDFDFB;
-          padding: 12px;
-          max-height: 420px;
-          overflow-y: auto;
-        }
-        .msg {
-          max-width: 70%;
-          margin: 6px 0;
-          padding: 10px 12px;
-          border-radius: 12px;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-          line-height: 1.25;
-          color: #3A3A3A;
-        }
-        .me {
-          margin-left: auto;
-          background: #279989; /* Caribbean Sea */
-          color: #fff;
-        }
-        .them {
-          background: #FFFFFF;
-          border: 1px solid #E9E9E9;
-        }
-        .time {
-          display: block;
-          font-size: 11px;
-          opacity: 0.7;
-          margin-top: 4px;
-        }
-        form {
-          display: flex;
-          gap: 8px;
-          padding: 10px;
-          background: #fff;
-          border-top: 1px solid #E9E9E9;
-        }
-        input[type="text"] {
-          flex: 1;
-          border: 1px solid #E9E9E9;
-          border-radius: 8px;
-          padding: 10px 12px;
-          outline: none;
-        }
-        input[type="text"]:focus {
-          border-color: #279989;
-          box-shadow: 0 0 0 4px #ECF6F4;
-        }
-        button {
-          border: none;
-          border-radius: 8px;
-          padding: 10px 14px;
-          font-weight: 700;
-          background: #279989;
-          color: #fff;
-          cursor: pointer;
-        }
-        button:hover { background: #1E7A6F; }
+        .chat { border:1px solid #E9E9E9; border-radius:12px; overflow:hidden; background:#fff; display:flex; flex-direction:column; height:420px; }
+        .head { background:#F8F7EC; padding:10px 14px; font-weight:700; color:#141B4D; font-family:'Poppins',sans-serif; }
+        .list { flex:1; overflow:auto; padding: 12px; background:#fff; }
+        .row { margin: 8px 0; display:flex; }
+        .row.you { justify-content:flex-end; }
+        .bubble { max-width: 72%; padding:10px 12px; border-radius:12px; line-height:1.3; }
+        .me { background:#279989; color:#fff; border-top-right-radius:4px; }
+        .them { background:#ECF6F4; color:#141B4D; border-top-left-radius:4px; }
+        .meta { font-size:11px; color:#666; margin-top:4px; }
+        form { border-top:1px solid #E9E9E9; display:flex; gap:8px; padding:10px; background:#fff; }
+        input[type="text"] { flex:1; border:1px solid #E9E9E9; border-radius:10px; padding:10px 12px; }
+        input[type="text"]:focus { outline:none; border-color:#279989; box-shadow:0 0 0 4px #ECF6F4; }
+        button { background:#279989; color:#fff; border:none; border-radius:10px; padding:10px 14px; font-weight:700; }
+        button:hover { background:#1E7A6F; }
       `}</style>
 
-      <div className="list" ref={scrollerRef} aria-live="polite">
-        {loading ? (
-          <p style={{ textAlign: "center", color: "#666" }}>Loading messages…</p>
-        ) : messages.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#666" }}>No messages yet. Say hi!</p>
-        ) : (
-          messages.map((m) => {
-            const mine = m.from_user === currentUserId;
-            return (
-              <div key={m.id} className={`msg ${mine ? "me" : "them"}`}>
+      <div className="head">Conversation</div>
+
+      <div className="list">
+        {loading && <div className="meta">Loading messages…</div>}
+        {messages.map((m) => {
+          const mine = m.sender === me?.id;
+          return (
+            <div key={m.id} className={`row ${mine ? "you" : ""}`}>
+              <div className={`bubble ${mine ? "me" : "them"}`}>
                 <div>{m.body}</div>
-                <span className="time">
-                  {new Date(m.created_at).toLocaleString()}
-                </span>
+                <div className="meta">{new Date(m.created_at).toLocaleString()}</div>
               </div>
-            );
-          })
-        )}
+            </div>
+          );
+        })}
+        <div ref={endRef} />
       </div>
 
       <form onSubmit={sendMessage}>
         <input
           type="text"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Write a message…"
-          aria-label="Message"
+          placeholder="Type a message…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
         />
-        <button type="submit" disabled={sending || !body.trim()}>
-          {sending ? "Sending…" : "Send"}
-        </button>
+        <button type="submit">Send</button>
       </form>
     </div>
   );
