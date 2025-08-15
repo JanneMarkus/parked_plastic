@@ -107,6 +107,12 @@ export default function Header() {
     router.push("/");
   }
 
+  function handleAvatarClick() {
+    setMenuOpen(false);
+    if (user) router.push("/account");
+    else router.push(`/login?redirect=${encodeURIComponent("/account")}`);
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     setMenuOpen(false);
@@ -140,20 +146,28 @@ export default function Header() {
 
         {user ? (
           <div className="account">
-            {profile.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={displayName}
-                referrerPolicy="no-referrer"
-                className="avatar"
-                width={36}
-                height={36}
-              />
-            ) : (
-              <div className="avatar initials" aria-label="User avatar" title={displayName}>
-                {initials}
-              </div>
-            )}
+            <button
+              type="button"
+              className="avatarButton"
+              onClick={handleAvatarClick}
+              aria-label="Go to Manage Listings"
+              title={`${displayName} — Manage Listings`}
+            >
+              {profile.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className="avatar"
+                  width={36}
+                  height={36}
+                />
+              ) : (
+                <div className="avatar initials" aria-hidden="true">
+                  {initials}
+                </div>
+              )}
+            </button>
             <div className="who">
               <div className="whoHint">Signed in as</div>
               <div className="whoName">{displayName}</div>
@@ -199,20 +213,28 @@ export default function Header() {
           {user ? (
             <>
               <div className="mobileUser">
-                {profile.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt={displayName}
-                    referrerPolicy="no-referrer"
-                    className="avatar"
-                    width={36}
-                    height={36}
-                  />
-                ) : (
-                  <div className="avatar initials" aria-label="User avatar" title={displayName}>
-                    {initials}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  className="avatarButton"
+                  onClick={handleAvatarClick}
+                  aria-label="Go to Manage Listings"
+                  title={`${displayName} — Manage Listings`}
+                >
+                  {profile.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="avatar"
+                      width={36}
+                      height={36}
+                    />
+                  ) : (
+                    <div className="avatar initials" aria-hidden="true">
+                      {initials}
+                    </div>
+                  )}
+                </button>
                 <div className="who mobileWho">
                   <div className="whoHint">Signed in as</div>
                   <div className="whoName">{displayName}</div>
@@ -366,6 +388,21 @@ export default function Header() {
           justify-content: center;
           font-weight: 700;
           font-size: 14px;
+        }
+        .avatarButton {
+          padding: 0;
+          margin: 0;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+        }
+        .avatarButton:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 4px var(--light-teal-tint);
         }
         .who { line-height: 1.1; }
         .whoHint { font-size: 11px; opacity: 0.7; }
