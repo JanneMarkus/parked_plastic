@@ -256,6 +256,7 @@ export default function Account() {
     (async () => {
       setLoading(true);
       setErrorMsg("");
+      console.log("[account] fetch start", { userId: user.id, statusFilter });
       try {
         let q = supabase
           .from("discs")
@@ -264,10 +265,13 @@ export default function Account() {
           .order("created_at", { ascending: false });
         if (statusFilter === "active") q = q.eq("is_sold", false);
         if (statusFilter === "sold") q = q.eq("is_sold", true);
+        const t0 = Date.now();
         const { data, error } = await q;
+        console.log("[account] fetch done", { ms: Date.now() - t0, error: error?.message, rows: data?.length });
         if (error) throw error;
         if (!cancelled) setListings(data || []);
       } catch (e) {
+        console.log("[account] fetch error", e?.message || e);
         console.error(e);
         if (!cancelled) {
           setErrorMsg("Failed to load your listings.");
