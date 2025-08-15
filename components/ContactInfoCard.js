@@ -44,14 +44,15 @@ export default function ContactInfoCard({ userId }) {
       }
       setLoading(false);
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [userId]);
 
   function setField(key, val) {
     setForm((f) => ({ ...f, [key]: val }));
   }
 
-  // relaxed client-side checks to avoid blocking valid data
   function validate() {
     if (form.public_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.public_email)) {
       return "That email doesn’t look valid.";
@@ -98,24 +99,25 @@ export default function ContactInfoCard({ userId }) {
   }
 
   return (
-    <section className="card" aria-label="Contact info shown to buyers">
-      <style jsx>{styles}</style>
-
-      <div className="titleRow">
-        <h2>Contact Info</h2>
-        <p className="subtle">These details show on your listings. Leave blank to hide a channel.</p>
+    <section className="pp-card pp-card--pad" aria-label="Contact info shown to buyers">
+      <div style={{ marginBottom: "12px" }}>
+        <h2 style={{ margin: 0 }}>Contact Info</h2>
+        <p style={{ color: "var(--char)", opacity: 0.85, margin: 0, fontSize: ".95rem" }}>
+          These details show on your listings. Leave blank to hide a channel.
+        </p>
       </div>
 
       {loading ? (
-        <p className="muted">Loading…</p>
+        <p style={{ color: "#666" }}>Loading…</p>
       ) : (
         <form onSubmit={onSave}>
-          <div className="grid3">
-            <div className="field">
+          <div className="pp-grid2" style={{ marginBottom: "12px" }}>
+            <div className="pp-field">
               <label htmlFor="public_email">Public email</label>
               <input
                 id="public_email"
                 type="email"
+                className="pp-input"
                 placeholder="you@example.com"
                 value={form.public_email}
                 onChange={(e) => setField("public_email", e.target.value)}
@@ -123,11 +125,12 @@ export default function ContactInfoCard({ userId }) {
               />
             </div>
 
-            <div className="field">
+            <div className="pp-field">
               <label htmlFor="phone">Phone (with country code)</label>
               <input
                 id="phone"
                 type="tel"
+                className="pp-input"
                 placeholder="+17055551234"
                 value={form.phone}
                 onChange={(e) => setField("phone", e.target.value)}
@@ -135,11 +138,12 @@ export default function ContactInfoCard({ userId }) {
               />
             </div>
 
-            <div className="field">
+            <div className="pp-field">
               <label htmlFor="messenger">Messenger username</label>
               <input
                 id="messenger"
                 type="text"
+                className="pp-input"
                 placeholder="john.doe.discgolf"
                 value={form.messenger}
                 onChange={(e) => setField("messenger", e.target.value)}
@@ -148,12 +152,31 @@ export default function ContactInfoCard({ userId }) {
             </div>
           </div>
 
-          <div aria-live="polite" className="status">
-            {msg.text && <div className={`chip ${msg.kind === "error" ? "error" : "info"}`}>{msg.text}</div>}
+          <div aria-live="polite" style={{ minHeight: "28px", marginBottom: "8px" }}>
+            {msg.text && (
+              <div
+                className="pp-badge"
+                style={{
+                  background:
+                    msg.kind === "error" ? "#fff5f4" : "#f4fff9",
+                  border:
+                    msg.kind === "error"
+                      ? "1px solid #ffd9d5"
+                      : "1px solid #d1f5e5",
+                  color: msg.kind === "error" ? "#8c2f28" : "#1a6a58",
+                }}
+              >
+                {msg.text}
+              </div>
+            )}
           </div>
 
-          <div className="actions">
-            <button type="submit" className="btn btn-primary" disabled={!dirty || saving}>
+          <div className="pp-actions">
+            <button
+              type="submit"
+              className="pp-btn pp-btn--primary"
+              disabled={!dirty || saving}
+            >
               {saving ? "Saving…" : "Save changes"}
             </button>
           </div>
@@ -162,89 +185,3 @@ export default function ContactInfoCard({ userId }) {
     </section>
   );
 }
-
-const styles = `
-  :root {
-    --storm: #141B4D;         /* Primary Dark */
-    --teal: #279989;          /* Primary Accent */
-    --teal-dark: #1E7A6F;
-    --sea: #F8F7EC;           /* Background */
-    --wave: #D6D2C4;          /* Secondary BG */
-    --char: #3A3A3A;          /* Neutral Text */
-    --cloud: #E9E9E9;         /* Borders */
-    --tint: #ECF6F4;          /* Accent Tint */
-  }
-
-  .card {
-    background:#fff;
-    border:1px solid var(--cloud);
-    border-radius:14px;
-    box-shadow:0 4px 10px rgba(0,0,0,0.05);
-    padding:18px;
-    margin: 12px 0 20px;
-  }
-
-  .titleRow {
-    display:flex; align-items:baseline; justify-content:space-between;
-    gap:12px; margin-bottom:10px;
-  }
-  h2 {
-    margin:0;
-    font-family:'Poppins',sans-serif;
-    font-weight:600;
-    color:var(--storm);
-    letter-spacing:.5px;
-    font-size:1.25rem;
-  }
-  .subtle { color: var(--char); opacity:.85; margin:0; font-size:.95rem; }
-  .muted { color:#666; }
-
-  /* Grid: mobile-first, then 3-up on md+ */
-  .grid3 { display:grid; grid-template-columns:1fr; gap:14px; }
-  @media (min-width:768px){ .grid3 { grid-template-columns:1fr 1fr 1fr; gap:16px; } }
-
-  .field label {
-    display:block;
-    font-family:'Poppins',sans-serif;
-    font-weight:600;
-    color:var(--storm);
-    font-size:.95rem;
-    margin-bottom:6px;
-  }
-  .field input {
-    width:100%;
-    background:#fff;
-    border:1px solid var(--cloud);
-    border-radius:10px;
-    padding:12px 14px;
-    font-size:15px;
-    color:var(--char);
-    outline:none;
-    transition:border-color .15s, box-shadow .15s;
-  }
-  .field input:focus {
-    border-color:var(--teal);
-    box-shadow:0 0 0 4px var(--tint);
-  }
-
-  .status { min-height:28px; margin-top:6px; }
-  .chip {
-    display:inline-block;
-    border-radius:10px;
-    padding:8px 10px;
-    font-size:.95rem;
-  }
-  .chip.info  { background:#f4fff9; border:1px solid #d1f5e5; color:#1a6a58; }
-  .chip.error { background:#fff5f4; border:1px solid #ffd9d5; color:#8c2f28; }
-
-  .actions {
-    margin-top:10px;
-    display:flex; justify-content:flex-end;
-  }
-  .btn {
-    border:none; border-radius:10px; padding:12px 16px;
-    font-weight:700; cursor:pointer; font-size:14px;
-  }
-  .btn-primary { background:var(--teal); color:#fff; }
-  .btn-primary:hover { background:var(--teal-dark); }
-`;

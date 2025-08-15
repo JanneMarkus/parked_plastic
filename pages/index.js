@@ -6,9 +6,7 @@ import Image from "next/image";
 import { Poppins, Source_Sans_3 } from "next/font/google";
 import { supabase } from "@/lib/supabaseClient";
 import { getBlurDataURL } from "@/lib/blurClient";
-
-// ⚠️ Ensure your Supabase storage domain is allowed in next.config.mjs:
-// export default { images: { remotePatterns: [{ protocol: "https", hostname: "reovcaxdkizsjddgacee.supabase.co", pathname: "/storage/v1/object/public/listing-images/**" }] } }
+import GlobalStyles from "@/components/GlobalStyles";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -20,7 +18,8 @@ const sourceSans = Source_Sans_3({
   subsets: ["latin"],
   weight: ["400", "600"],
   display: "swap",
-  variable: "--font-source-sans",
+  // Match GlobalStyles expectation of --font-source
+  variable: "--font-source",
 });
 
 const CONDITION_OPTIONS = ["New", "Like New", "Excellent", "Good", "Used", "Beat"];
@@ -38,7 +37,7 @@ export default function Home() {
   const [discs, setDiscs] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Filters (city intentionally omitted)
+  // Filters
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("");
   const [mold, setMold] = useState("");
@@ -48,8 +47,9 @@ export default function Home() {
   const [minWeight, setMinWeight] = useState("");
   const [maxWeight, setMaxWeight] = useState("");
   const [includeSold, setIncludeSold] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Blur placeholder cache (src -> dataURL)
+  // Blur placeholder cache
   const [blurs, setBlurs] = useState({});
   const prefetchingRef = useRef(false);
 
@@ -60,7 +60,6 @@ export default function Home() {
     (async () => {
       setLoading(true);
       try {
-        // Select only needed columns (smaller payload than "*")
         let query = supabase
           .from("discs")
           .select("id,title,brand,mold,weight,condition,price,is_sold,image_urls,created_at")
@@ -111,21 +110,19 @@ export default function Home() {
     };
   }, [debouncedSearch, brand, mold, condition, minPrice, maxPrice, minWeight, maxWeight, includeSold]);
 
-  // Prefetch blurDataURL for the first ~8 images whenever the list updates
+  // Prefetch blurDataURL
   useEffect(() => {
     if (prefetchingRef.current) return;
     const candidates = discs
       .map((d) => d.image_urls?.[0])
       .filter(Boolean)
       .slice(0, 8)
-      .filter((src) => !blurs[src]); // only fetch unknown
+      .filter((src) => !blurs[src]);
     if (candidates.length === 0) return;
 
     prefetchingRef.current = true;
     (async () => {
-      const entries = await Promise.all(
-        candidates.map(async (src) => [src, await getBlurDataURL(src)])
-      );
+      const entries = await Promise.all(candidates.map(async (src) => [src, await getBlurDataURL(src)]));
       setBlurs((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
       prefetchingRef.current = false;
     })();
@@ -166,148 +163,173 @@ export default function Home() {
           name="description"
           content="Browse used disc golf listings. Filter by brand, mold, condition, weight, and price — or search everything."
         />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       </Head>
 
-      <main className={`${poppins.variable} ${sourceSans.variable}`}>
-        <h1 className="title">Parked Plastic — Disc Listings</h1>
-        <p className="sub">
-          Browse used discs. Filter by brand, mold, condition, weight, and price — or search
-          everything.
-        </p>
+      <GlobalStyles />
 
+      <main className={`${poppins.variable} ${sourceSans.variable} pp-wrap`}>
+        <h1 className="pageTitle">Parked Plastic — Disc Listings</h1>
+        <p className="sub">Browse used discs. Search everything, or expand filters for finer control.</p>
+
+        {/* Filters */}
         <section className="filters" aria-label="Search and filters">
           <form onSubmit={(e) => e.preventDefault()}>
-            <div className="field col-12">
-              <label htmlFor="search">Search</label>
-              <input
-                id="search"
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search title, brand, mold, plastic, description…"
-                autoComplete="off"
-                inputMode="search"
-              />
-            </div>
-
-            <div className="field col-6">
-              <label htmlFor="brand">Brand</label>
-              <input
-                id="brand"
-                type="text"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                placeholder="Innova, Discraft, MVP…"
-                autoComplete="off"
-              />
-            </div>
-
-            <div className="field col-6">
-              <label htmlFor="mold">Mold</label>
-              <input
-                id="mold"
-                type="text"
-                value={mold}
-                onChange={(e) => setMold(e.target.value)}
-                placeholder="Destroyer, Buzzz, Hex…"
-                autoComplete="off"
-              />
-            </div>
-
-            <div className="field col-3">
-              <label htmlFor="condition">Condition</label>
-              <select
-                id="condition"
-                value={condition}
-                onChange={(e) => setCondition(e.target.value)}
-              >
-                <option value="">Any</option>
-                {CONDITION_OPTIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field col-3">
-              <label htmlFor="minWeight">Min Weight (g)</label>
-              <input
-                id="minWeight"
-                type="number"
-                min={120}
-                max={200}
-                placeholder="165"
-                value={minWeight}
-                onChange={(e) => setMinWeight(e.target.value)}
-                inputMode="numeric"
-              />
-            </div>
-
-            <div className="field col-3">
-              <label htmlFor="maxWeight">Max Weight (g)</label>
-              <input
-                id="maxWeight"
-                type="number"
-                min={120}
-                max={200}
-                placeholder="180"
-                value={maxWeight}
-                onChange={(e) => setMaxWeight(e.target.value)}
-                inputMode="numeric"
-              />
-            </div>
-
-            <div className="field col-3">
-              <label htmlFor="minPrice">Min Price (CAD)</label>
-              <input
-                id="minPrice"
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="10.00"
-                value={minPrice}
-                onChange={(e) => setMinPrice(e.target.value)}
-                inputMode="decimal"
-              />
-            </div>
-
-            <div className="field col-3">
-              <label htmlFor="maxPrice">Max Price (CAD)</label>
-              <input
-                id="maxPrice"
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="35.00"
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
-                inputMode="decimal"
-              />
-            </div>
-
-            <div className="toggles">
-              <label className="checkbox">
+            {/* Always-visible search row */}
+            <div className="bar">
+              <div className="pp-field grow">
+                <label htmlFor="search">Search</label>
                 <input
-                  type="checkbox"
-                  checked={includeSold}
-                  onChange={(e) => setIncludeSold(e.target.checked)}
+                  id="search"
+                  className="pp-input"
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search title, brand, mold, plastic, description…"
+                  autoComplete="off"
+                  inputMode="search"
                 />
-                Include sold listings
-              </label>
+              </div>
+              <div className="bar-actions">
+                {activeFiltersCount > 0 && (
+                  <span className="pp-badge pp-badge--coral" aria-label={`${activeFiltersCount} active filters`}>
+                    {activeFiltersCount} active
+                  </span>
+                )}
+                {activeFiltersCount > 0 && (
+                  <button className="pp-btn pp-btn--secondary" type="button" onClick={resetFilters}>
+                    Reset
+                  </button>
+                )}
+                <button
+                  className="pp-btn pp-btn--secondary"
+                  type="button"
+                  onClick={() => setShowFilters((v) => !v)}
+                  aria-expanded={showFilters ? "true" : "false"}
+                  aria-controls="filter-grid"
+                >
+                  {showFilters ? "Hide filters" : "Show filters"}
+                </button>
+              </div>
             </div>
 
-            <div className="actions">
-              {activeFiltersCount > 0 && (
-                <span className="badge" aria-label={`${activeFiltersCount} active filters`}>
-                  {activeFiltersCount} active
-                </span>
-              )}
-              <button className="btn btn-secondary" type="button" onClick={resetFilters}>
-                Reset
-              </button>
-            </div>
+            {/* Collapsible filter grid */}
+            {showFilters && (
+              <div id="filter-grid" className="grid">
+                <div className="pp-field">
+                  <label htmlFor="brand">Brand</label>
+                  <input
+                    id="brand"
+                    className="pp-input"
+                    type="text"
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
+                    placeholder="Innova, Discraft, MVP…"
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="pp-field">
+                  <label htmlFor="mold">Mold</label>
+                  <input
+                    id="mold"
+                    className="pp-input"
+                    type="text"
+                    value={mold}
+                    onChange={(e) => setMold(e.target.value)}
+                    placeholder="Destroyer, Buzzz, Hex…"
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="pp-field">
+                  <label htmlFor="condition">Condition</label>
+                  <select
+                    id="condition"
+                    className="pp-select"
+                    value={condition}
+                    onChange={(e) => setCondition(e.target.value)}
+                  >
+                    <option value="">Any</option>
+                    {CONDITION_OPTIONS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="pp-field">
+                  <label htmlFor="minWeight">Min Weight (g)</label>
+                  <input
+                    id="minWeight"
+                    className="pp-input"
+                    type="number"
+                    min={120}
+                    max={200}
+                    placeholder="165"
+                    value={minWeight}
+                    onChange={(e) => setMinWeight(e.target.value)}
+                    inputMode="numeric"
+                  />
+                </div>
+
+                <div className="pp-field">
+                  <label htmlFor="maxWeight">Max Weight (g)</label>
+                  <input
+                    id="maxWeight"
+                    className="pp-input"
+                    type="number"
+                    min={120}
+                    max={200}
+                    placeholder="180"
+                    value={maxWeight}
+                    onChange={(e) => setMaxWeight(e.target.value)}
+                    inputMode="numeric"
+                  />
+                </div>
+
+                <div className="pp-field">
+                  <label htmlFor="minPrice">Min Price (CAD)</label>
+                  <input
+                    id="minPrice"
+                    className="pp-input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="10.00"
+                    value={minPrice}
+                    onChange={(e) => setMinPrice(e.target.value)}
+                    inputMode="decimal"
+                  />
+                </div>
+
+                <div className="pp-field">
+                  <label htmlFor="maxPrice">Max Price (CAD)</label>
+                  <input
+                    id="maxPrice"
+                    className="pp-input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="35.00"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    inputMode="decimal"
+                  />
+                </div>
+
+                <div className="toggles">
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={includeSold}
+                      onChange={(e) => setIncludeSold(e.target.checked)}
+                    />
+                    Include sold listings
+                  </label>
+                </div>
+              </div>
+            )}
           </form>
         </section>
 
@@ -315,15 +337,19 @@ export default function Home() {
           <div>{loading ? "Loading…" : `${discs.length} result${discs.length === 1 ? "" : "s"}`}</div>
         </div>
 
-        <div className="grid" aria-busy={loading ? "true" : "false"}>
+        {/* Cards — match Account page look & feel */}
+        <div className="grid-cards" aria-busy={loading ? "true" : "false"}>
           {discs.map((d, idx) => {
             const src = d.image_urls?.[0];
             const hasImage = !!src;
+            const price =
+              d.price != null && Number.isFinite(Number(d.price)) ? `$${Number(d.price).toFixed(2)}` : null;
+
             return (
               <Link
                 href={`/listings/${d.id}`}
                 key={d.id}
-                className={`card ${d.is_sold ? "sold" : ""}`}
+                className={`pp-card listing-card ${d.is_sold ? "is-sold" : ""}`}
                 aria-label={`View ${d.title}`}
                 title={d.title}
                 prefetch={idx < 6}
@@ -337,16 +363,14 @@ export default function Home() {
                       fill
                       placeholder={blurs[src] ? "blur" : undefined}
                       blurDataURL={blurs[src]}
-                      sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, (max-width: 1200px) 33vw, 280px"
+                      sizes="(max-width: 600px) 100vw, (max-width: 1100px) 50vw, 33vw"
+                      style={{ objectFit: "cover" }}
+                      priority={false}
                     />
                   ) : (
                     <div className="img placeholder" aria-label="No image available" />
                   )}
-                  {d.is_sold && (
-                    <div className="soldBanner" aria-label="Sold">
-                      SOLD
-                    </div>
-                  )}
+                  {d.is_sold && <div className="soldBanner">SOLD</div>}
                 </div>
 
                 <div className="content">
@@ -359,9 +383,7 @@ export default function Home() {
                     <span>{d.weight != null ? `${d.weight} g` : "N/A"}</span>
                     {d.condition && <span>{d.condition}</span>}
                   </div>
-                  {d.price != null && (
-                    <div className="price">${Number(d.price).toFixed(2)}</div>
-                  )}
+                  {price && <div className="price pp-badge pp-badge--coral">{price}</div>}
                 </div>
               </Link>
             );
@@ -370,99 +392,48 @@ export default function Home() {
       </main>
 
       <style jsx>{`
-        /* Brand tokens */
-        :root {
-          --storm-blue: #141b4d;
-          --caribbean-sea: #279989;
-          --sea-mist: #f8f7ec;
-          --wave-crest: #d6d2c4;
-          --soft-charcoal: #3a3a3a;
-          --cloud-grey: #e9e9e9;
-          --highlight-coral: #e86a5e;
-          --light-teal-tint: #ecf6f4;
-        }
-
-        /* Mobile-first layout */
-        main {
-          max-width: 1200px;
-          margin: 24px auto 72px;
-          padding: 0 12px;
-          font-family: var(--font-source-sans), system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans,
-            "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
-          color: var(--soft-charcoal);
-          background: var(--sea-mist);
-        }
-
-        .title {
-          font-family: var(--font-poppins), system-ui, sans-serif;
-          font-weight: 600;
-          letter-spacing: 0.5px;
-          color: var(--storm-blue);
+        .pageTitle {
           text-align: center;
           margin: 0 0 12px;
           font-size: 1.6rem;
+          letter-spacing: 0.5px;
         }
-
         .sub {
           text-align: center;
           margin: 0 0 16px;
         }
 
-        /* Filters */
+        /* Filters container */
         .filters {
           background: #fff;
-          border: 1px solid var(--cloud-grey);
-          border-radius: 12px;
+          border: 1px solid var(--cloud);
+          border-radius: var(--radius);
+          box-shadow: var(--shadow-md);
           padding: 12px;
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
           margin-bottom: 16px;
         }
-
-        .filters form {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: repeat(6, 1fr); /* mobile grid */
-          align-items: end;
-        }
-
-        .field {
+        .bar {
           display: flex;
-          flex-direction: column;
-          gap: 6px;
+          gap: 12px;
+          align-items: end;
+          flex-wrap: wrap;
         }
 
-        .field label {
-          font-size: 0.85rem;
-          color: var(--storm-blue);
-          font-weight: 600;
-          font-family: var(--font-poppins), system-ui, sans-serif;
+        .bar .grow {
+          flex: 1 1 280px;
+        }
+        .bar-actions {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          margin-left: auto;
         }
 
-        .field input,
-        .field select {
-          background: #fff;
-          border: 1px solid var(--cloud-grey);
-          border-radius: 8px;
-          padding: 10px 12px;
-          font-size: 14px;
-          outline: none;
-          transition: box-shadow 0.15s, border-color 0.15s;
-        }
-
-        .field input:focus,
-        .field select:focus {
-          border-color: var(--caribbean-sea);
-          box-shadow: 0 0 0 4px var(--light-teal-tint);
-        }
-
-        .col-12 {
-          grid-column: span 6; /* mobile full row */
-        }
-        .col-6 {
-          grid-column: span 6;
-        }
-        .col-3 {
-          grid-column: span 3;
+        .grid {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: repeat(1, minmax(0, 1fr));
+          margin-top: 12px;
         }
 
         .checkbox {
@@ -470,167 +441,10 @@ export default function Home() {
           gap: 8px;
           align-items: center;
         }
-
         .toggles {
           display: flex;
-          gap: 12px;
           align-items: center;
-          margin-right: auto;
-          grid-column: span 6;
-        }
-
-        .actions {
-          display: flex;
           gap: 12px;
-          justify-content: stretch;
-          align-items: center;
-          grid-column: span 6;
-        }
-
-        .badge {
-          display: inline-block;
-          background: var(--highlight-coral);
-          color: #fff;
-          padding: 4px 8px;
-          border-radius: 6px;
-          font-size: 0.8rem;
-          font-weight: 600;
-        }
-
-        .btn {
-          border: none;
-          border-radius: 8px;
-          padding: 10px 14px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-        .btn-secondary {
-          background: #fff;
-          color: var(--storm-blue);
-          border: 2px solid var(--storm-blue);
-        }
-        .btn-secondary:hover {
-          background: var(--storm-blue);
-          color: #fff;
-        }
-
-        /* Cards */
-        .grid {
-          display: grid;
-          grid-template-columns: repeat(1, minmax(0, 1fr));
-          gap: 16px;
-        }
-
-        .card {
-          position: relative;
-          background: var(--wave-crest);
-          border-radius: 12px;
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-          transition: transform 0.2s, box-shadow 0.2s;
-          text-decoration: none;
-        }
-
-        .card:hover {
-          transform: scale(1.03);
-          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-        }
-
-        .img-wrap {
-          position: relative;
-          width: 100%;
-          aspect-ratio: 4 / 3; /* enforce 4:3 listing photos */
-          overflow: hidden;
-          background: var(--cloud-grey);
-          border-bottom: 1px solid var(--cloud-grey);
-        }
-
-        :global(.img) {
-          object-fit: cover;
-          transition: filter 0.2s ease, opacity 0.2s ease;
-        }
-
-        .placeholder {
-          width: 100%;
-          height: 100%;
-        }
-
-        .sold .img {
-          filter: grayscale(1) brightness(0.82) contrast(1.1);
-          opacity: 0.88;
-        }
-        .sold .img-wrap::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(transparent, rgba(20, 27, 77, 0.22));
-          pointer-events: none;
-        }
-
-        .soldBanner {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          padding: 10px 18px;
-          border-radius: 14px;
-          font-family: var(--font-poppins), system-ui, sans-serif;
-          font-weight: 800;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-          color: #fff;
-          background: rgba(20, 27, 77, 0.88); /* Storm Blue */
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          box-shadow: 0 10px 24px rgba(20, 27, 77, 0.25);
-          backdrop-filter: blur(2px);
-          z-index: 2;
-        }
-
-        .content {
-          padding: 14px;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          flex-grow: 1;
-        }
-
-        .cardTitle {
-          font-family: var(--font-poppins), system-ui, sans-serif;
-          font-weight: 600;
-          color: var(--storm-blue);
-          font-size: 1.05rem;
-          margin: 0;
-        }
-
-        .meta {
-          font-size: 0.9rem;
-          color: var(--soft-charcoal);
-        }
-
-        .specs {
-          font-size: 0.9rem;
-          color: var(--soft-charcoal);
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          margin-top: 2px;
-          margin-bottom: auto;
-        }
-
-        .specs span:not(:last-child)::after {
-          content: "•";
-          margin-left: 8px;
-          color: var(--cloud-grey);
-        }
-
-        .price {
-          font-family: var(--font-poppins), system-ui, sans-serif;
-          font-weight: 600;
-          color: var(--storm-blue);
-          font-size: 1.02rem;
-          margin-top: 6px;
         }
 
         .resultbar {
@@ -638,64 +452,120 @@ export default function Home() {
           justify-content: space-between;
           align-items: center;
           margin: 10px 4px 16px;
-          color: var(--soft-charcoal);
         }
 
-        /* ≥480px */
+        /* ===== Cards (Account parity + small hover polish) ===== */
+        .grid-cards {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 20px;
+        }
+        .listing-card {
+          position: relative;
+          overflow: hidden; /* clip rounded corners for image */
+          display: flex;
+          flex-direction: column;
+          text-decoration: none;
+          transition: box-shadow 0.18s ease, transform 0.18s ease;
+        }
+        .listing-card:hover {
+          box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+          transform: translateY(-2px);
+        }
+
+        .img-wrap {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 4 / 3;
+          overflow: hidden;
+          background: var(--cloud);
+        }
+        .img {
+          transition: transform 0.25s ease;
+        }
+        .listing-card:hover .img {
+          transform: scale(1.05);
+        }
+
+        .listing-card.is-sold .img {
+          filter: grayscale(1) brightness(0.82) contrast(1.1);
+          opacity: 0.9;
+        }
+        .listing-card.is-sold .img-wrap::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(transparent, rgba(20, 27, 77, 0.22));
+          pointer-events: none;
+        }
+        .soldBanner {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          padding: 10px 18px;
+          border-radius: 14px;
+          font-family: var(--font-poppins, system-ui);
+          font-weight: 800;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: #fff;
+          background: rgba(20, 27, 77, 0.88);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          box-shadow: 0 10px 24px rgba(20, 27, 77, 0.25);
+        }
+
+        .content {
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .cardTitle {
+          font-family: var(--font-poppins, system-ui);
+          font-weight: 600;
+          margin: 0;
+          font-size: 1.05rem;
+        }
+        .meta {
+          font-size: 0.9rem;
+          opacity: 0.95;
+        }
+        .specs {
+          font-size: 0.9rem;
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-top: 2px;
+          margin-bottom: auto;
+        }
+        .specs span:not(:last-child)::after {
+          content: "•";
+          margin-left: 8px;
+          color: var(--cloud);
+        }
+        .price {
+          align-self: flex-start;
+        }
+
+        /* Responsive layout */
         @media (min-width: 480px) {
-          .title {
+          .pageTitle {
             font-size: 1.8rem;
           }
           .filters {
             padding: 14px;
           }
-          .grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 20px;
-          }
         }
-
-        /* ≥768px */
         @media (min-width: 768px) {
-          main {
-            margin: 32px auto 80px;
-            padding: 0 16px;
-          }
-          .title {
+          .pageTitle {
             font-size: 2rem;
-            margin-bottom: 16px;
-          }
-          .filters form {
-            grid-template-columns: repeat(12, 1fr);
-            gap: 12px;
-          }
-          .col-12 {
-            grid-column: span 12;
-          }
-          .col-6 {
-            grid-column: span 6;
-          }
-          .col-3 {
-            grid-column: span 3;
-          }
-          .toggles,
-          .actions {
-            grid-column: span 12;
-          }
-          .grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 24px;
+            margin-bottom: 2px;
           }
         }
-
-        /* ≥1200px */
         @media (min-width: 1200px) {
-          .title {
+          .pageTitle {
             font-size: 2.2rem;
-          }
-          .grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 24px;
           }
         }
       `}</style>

@@ -96,6 +96,17 @@ export default function Header() {
     else router.push(`/login?redirect=${encodeURIComponent("/create-listing")}`);
   }
 
+  function handleManageClick() {
+    setMenuOpen(false);
+    if (user) router.push("/account");
+    else router.push(`/login?redirect=${encodeURIComponent("/account")}`);
+  }
+
+  function handleBrowseClick() {
+    setMenuOpen(false);
+    router.push("/");
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     setMenuOpen(false);
@@ -113,8 +124,8 @@ export default function Header() {
 
       {/* Center nav (desktop only) */}
       <nav className="center" aria-label="Primary">
-        <Link href="/" className="navLink">Browse</Link>
-        <button className="linkButton navLink" onClick={handlePostClick}>Post a Disc</button>
+        <button className="linkButton navLink" onClick={handleBrowseClick}>Browse</button>
+        <button className="linkButton navLink" onClick={handleManageClick}>Manage Listings</button>
       </nav>
 
       {/* Mobile CTA sits in the middle row on small screens */}
