@@ -22,59 +22,76 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
   const [signedInUser, setSignedInUser] = useState(null);
 
-  // If already signed in, bounce to nextPath.
+  // Resolve session quickly (works after OAuth redirect and on normal loads)
   useEffect(() => {
-  let active = true;
-  (async () => {
-    try {
-      const { data } = await supabase.auth.getUser();
+    let active = true;
+
+    // 1) Grab current session (fast, no network if cached)
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        setSignedInUser(data?.session?.user ?? null);
+        setChecking(false);
+      })
+      .catch(() => {
+        if (active) setChecking(false);
+      });
+
+    // 2) Also listen for SIGNED_IN after OAuth exchange
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
-      setSignedInUser(data?.user ?? null); // don't auto-redirect; let user choose
-    } catch (e) {
-      // show login UI
-    } finally {
+      setSignedInUser(session?.user ?? null);
+      setChecking(false);
+    });
+
+    // 3) Last-ditch safety: never show spinner forever
+    const t = setTimeout(() => {
       if (active) setChecking(false);
-    }
-  })();
-  return () => { active = false; };
-}, []);
+    }, 4000);
+
+    return () => {
+      active = false;
+      clearTimeout(t);
+      sub?.subscription?.unsubscribe?.();
+    };
+  }, []);
 
   const signInWithGoogle = async (forceAccountSelection = false) => {
-  setErrorMsg("");
-  setSubmitting(true);
-  try {
-    const origin =
-      typeof window !== "undefined" && window.location?.origin
-        ? window.location.origin
-        : undefined;
+    setErrorMsg("");
+    setSubmitting(true);
+    try {
+      const origin =
+        typeof window !== "undefined" && window.location?.origin
+          ? window.location.origin
+          : undefined;
 
-    const redirectTo =
-      origin != null
-        ? `${origin}/login?redirect=${encodeURIComponent(nextPath)}`
-        : undefined;
+      const redirectTo =
+        origin != null
+          ? `${origin}/login?redirect=${encodeURIComponent(nextPath)}`
+          : undefined;
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo,
-        queryParams: forceAccountSelection ? { prompt: "select_account" } : undefined,
-      },
-    });
-    if (error) throw error;
-  } catch (e) {
-    setErrorMsg(e?.message || "Sign-in failed. Please try again.");
-    setSubmitting(false);
-  }
-};
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          queryParams: forceAccountSelection ? { prompt: "select_account" } : undefined,
+        },
+      });
+      if (error) throw error;
+    } catch (e) {
+      setErrorMsg(e?.message || "Sign-in failed. Please try again.");
+      setSubmitting(false);
+    }
+  };
 
-const signInDifferent = async () => {
-  try {
-    await supabase.auth.signOut(); // clear current Supabase session
-  } catch {}
-  // Force Google's account chooser
-  await signInWithGoogle(true);
-};
-
+  const signInDifferent = async () => {
+    try {
+      await supabase.auth.signOut(); // clear current Supabase session
+    } catch {}
+    // Force Google's account chooser
+    await signInWithGoogle(true);
+  };
 
   return (
     <main className="wrap">
@@ -99,41 +116,51 @@ const signInDifferent = async () => {
         </div>
 
         {signedInUser ? (
-  <>
-    <div style={{ textAlign: "center", color: "var(--char)", margin: "0 0 12px" }}>
-      You’re signed in as <strong>{signedInUser.email || "your account"}</strong>.
-    </div>
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", marginTop: 8 }}>
-      <button
-        className="btn btn-primary"
-        onClick={() => router.replace(nextPath)}
-        disabled={checking}
-      >
-        Continue to {nextPath}
-      </button>
-      <button
-        className="btn btn-outline"
-        onClick={signInDifferent}
-        disabled={submitting || checking}
-        aria-busy={submitting}
-      >
-        Use a different Google account
-      </button>
-    </div>
-  </>
-) : (
-  <>
-    <button
-      className="btn btn-primary"
-      onClick={() => signInWithGoogle(true)}  // force chooser on first-time too
-      disabled={submitting || checking}
-      aria-busy={submitting}
-    >
-      <span className="gBadge" aria-hidden>G</span>
-      {submitting ? "Redirecting…" : "Sign in with Google"}
-    </button>
-  </>
-)}
+          <>
+            <div style={{ textAlign: "center", color: "var(--char)", margin: "0 0 12px" }}>
+              You’re signed in as <strong>{signedInUser.email || "your account"}</strong>.
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                justifyContent: "center",
+                marginTop: 8,
+              }}
+            >
+              <button
+                className="btn btn-primary"
+                onClick={() => router.replace(nextPath)}
+                disabled={checking}
+              >
+                Continue to {nextPath}
+              </button>
+              <button
+                className="btn btn-outline"
+                onClick={signInDifferent}
+                disabled={submitting || checking}
+                aria-busy={submitting}
+              >
+                Use a different Google account
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <button
+              className="btn btn-primary"
+              onClick={() => signInWithGoogle(true)} // force chooser on first-time too
+              disabled={submitting || checking}
+              aria-busy={submitting}
+            >
+              <span className="gBadge" aria-hidden>
+                G
+              </span>
+              {submitting ? "Redirecting…" : "Sign in with Google"}
+            </button>
+          </>
+        )}
       </div>
     </main>
   );
@@ -197,6 +224,13 @@ const styles = `
   .btn-primary { background: var(--teal); color: #fff; }
   .btn-primary:hover { background: var(--teal-dark); }
   .btn-primary[disabled] { opacity: .8; cursor: default; }
+
+  .btn-outline {
+    background: transparent;
+    border: 2px solid var(--teal);
+    color: var(--teal);
+  }
+  .btn-outline:hover { background: var(--teal); color: #fff; }
 
   .gBadge {
     background: #fff;
