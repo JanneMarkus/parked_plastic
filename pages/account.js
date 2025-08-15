@@ -226,17 +226,27 @@ export default function Account() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!active) return;
-      const u = data?.session?.user ?? null;
-      setUser(u);
-      setReady(true);
-      if (!u) router.replace(`/login?redirect=${encodeURIComponent("/account")}`);
-    })();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => sub?.subscription?.unsubscribe?.();
+     try {
+       const { data } = await supabase.auth.getSession();
+       if (!active) return;
+       const u = data?.session?.user ?? null;
+       setUser(u);
+       setReady(true);
+       if (!u) router.replace(`/login?redirect=${encodeURIComponent("/account")}`);
+     } catch {
+       // don’t hang the UI if getSession rejects for any reason
+       if (active) setReady(true);
+     }
+   })();
+   const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+     if (!active) return;
+     setUser(session?.user ?? null);
+     // ensure the gate opens even if the first getSession never resolves
+     setReady(true);
+   });
+   // last-resort safety net
+   const t = setTimeout(() => { if (active) setReady(true); }, 3000);
+   return () => { active = false; clearTimeout(t); sub?.subscription?.unsubscribe?.(); };
   }, [router]);
 
   // Load listings
