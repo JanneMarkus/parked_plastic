@@ -323,7 +323,7 @@ export default function Account() {
           <title>My Listings — Parked Plastic</title>
           <meta name="robots" content="noindex" />
         </Head>
-        <p className="center muted">Checking session…</p>
+        <p className="center muted">Checking session… V2</p>
         <style jsx>{`
           .center {
             text-align: center;
