@@ -32,9 +32,7 @@ function sanitizeRedirectPath(raw) {
 export default function MyApp({ Component, pageProps }) {
   const router = useRouter();
 
-  // Universal OAuth return handler:
-  // Exchanges ?code=... (PKCE) or #access_token=... (implicit) for a Supabase session,
-  // then cleans the URL and navigates to the intended path.
+  // Universal OAuth return handler
   useEffect(() => {
     let active = true;
     (async () => {
@@ -42,43 +40,34 @@ export default function MyApp({ Component, pageProps }) {
 
       const url = new URL(window.location.href);
       const next = sanitizeRedirectPath(url.searchParams.get("redirect") || "/");
+      const hasCode = !!url.searchParams.get("code");
+      const hasHashTokens = window.location.hash.includes("access_token") || window.location.hash.includes("error");
 
-      // 1) PKCE flow (?code=...)
-      const code = url.searchParams.get("code");
-      if (code) {
-        try {
-          await supabase.auth.exchangeCodeForSession({ code });
-        } catch (e) {
-          console.warn("exchangeCodeForSession failed", e);
-        } finally {
-          if (!active) return;
-          // Clean URL & go to next path without reloading
-          window.history.replaceState({}, "", next);
+      try {
+        if (hasCode) {
+          // PKCE code flow
+          const { error } = await supabase.auth.exchangeCodeForSession({ code: url.searchParams.get("code") });
+          if (error) console.warn("exchangeCodeForSession error:", error.message);
+        } else if (hasHashTokens) {
+          // Implicit flow (hash tokens) — let Supabase parse & store them
+          // This handles access_token/refresh_token in the hash and persists the session.
+          const { error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
+          if (error) console.warn("getSessionFromUrl error:", error.message);
+        } else {
+          return; // nothing to do
         }
-        return; // stop; handled
-      }
-
-      // 2) Implicit flow (#access_token=...)
-      if (window.location.hash && window.location.hash.includes("access_token")) {
-        const hash = new URLSearchParams(window.location.hash.slice(1));
-        const access_token = hash.get("access_token");
-        const refresh_token = hash.get("refresh_token");
-        if (access_token && refresh_token) {
-          try {
-            await supabase.auth.setSession({ access_token, refresh_token });
-          } catch (e) {
-            console.warn("setSession failed", e);
-          } finally {
-            if (!active) return;
-            window.history.replaceState({}, "", next);
-          }
-        }
+      } catch (e) {
+        console.warn("OAuth return handling failed:", e);
+      } finally {
+        if (!active) return;
+        // Clean the URL (remove code/hash) and go to intended path
+        window.history.replaceState({}, "", next);
       }
     })();
     return () => {
       active = false;
     };
-  }, [router.asPath]);
+  }, []); // run once on first mount
 
   // Upsert minimal profile on sign-in (runs whenever the session changes)
   useEffect(() => {
