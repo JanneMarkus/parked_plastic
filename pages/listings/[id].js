@@ -5,22 +5,32 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { supabase } from "@/lib/supabaseClient";
-import ChatWindow from "@/components/ChatWindow";
+import ContactSeller from "@/components/ContactSeller";
 
 export default function ListingDetail() {
   const router = useRouter();
-  const { id, openChat } = router.query;
+  const { id } = router.query;
 
   const [disc, setDisc] = useState(null);
   const [seller, setSeller] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
-
-  const [showChat, setShowChat] = useState(false);
   const [mainIdx, setMainIdx] = useState(0);
 
-  // Load session (so we can gate messaging and owner actions)
+  // Stable absolute URL for the listing
+  const listingUrl = useMemo(() => {
+    if (typeof window !== "undefined") {
+      return window.location.origin + router.asPath;
+    }
+    if (process.env.NEXT_PUBLIC_SITE_URL && id) {
+      const base = process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+      return `${base}/listings/${id}`;
+    }
+    return "";
+  }, [id, router.asPath]);
+
+  // Load session (for owner check)
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -42,28 +52,28 @@ export default function ListingDetail() {
       setLoading(true);
       setErrorMsg("");
       try {
-        const { data: d, error } = await supabase.from("discs").select("*").eq("id", id).single();
-        if (error || !d) throw error || new Error("Listing not found.");
+        // Listing
+        const { data: d, error: dErr } = await supabase
+          .from("discs")
+          .select("*")
+          .eq("id", id)
+          .single();
+        if (dErr || !d) throw dErr || new Error("Listing not found.");
         if (!active) return;
         setDisc(d);
 
+        // Seller profile (may not exist yet)
         if (d.owner) {
           const { data: p } = await supabase
             .from("profiles")
-            .select("id, full_name, avatar_url")
+            .select("id, full_name, avatar_url, public_email, phone, messenger")
             .eq("id", d.owner)
-            .single();
-          if (active) setSeller(p || { id: d.owner, full_name: null, avatar_url: null });
-        }
-
-        // Auto-open chat if requested and user is logged in (and not owner)
-        const { data: sess } = await supabase.auth.getSession();
-        const me = sess?.session?.user ?? null;
-        if (active && openChat && me?.id && d?.owner && me.id !== d.owner) {
-          setShowChat(true);
-          setTimeout(() => {
-            document.getElementById("chat-panel")?.scrollIntoView({ behavior: "smooth" });
-          }, 50);
+            .maybeSingle();
+          if (active) {
+            setSeller(
+              p || { id: d.owner, full_name: null, avatar_url: null, public_email: null, phone: null, messenger: null }
+            );
+          }
         }
       } catch (e) {
         console.error(e);
@@ -72,8 +82,10 @@ export default function ListingDetail() {
         if (active) setLoading(false);
       }
     })();
-    return () => { active = false; };
-  }, [id, openChat]);
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   const isOwner = useMemo(
     () => !!(currentUser?.id && disc?.owner && currentUser.id === disc.owner),
@@ -85,7 +97,10 @@ export default function ListingDetail() {
     const n = Number(disc.price);
     if (!Number.isFinite(n)) return "Contact";
     try {
-      return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(n);
+      return new Intl.NumberFormat("en-CA", {
+        style: "currency",
+        currency: "CAD",
+      }).format(n);
     } catch {
       return `$${n.toFixed(2)}`;
     }
@@ -93,16 +108,6 @@ export default function ListingDetail() {
 
   const imgs = Array.isArray(disc?.image_urls) ? disc.image_urls.filter(Boolean) : [];
   const mainImg = imgs[mainIdx] || null;
-
-  const handleMessageClick = () => {
-    if (!currentUser) {
-      router.push(`/login?redirect=${encodeURIComponent(`/listings/${id}?openChat=1`)}`);
-      return;
-    }
-    if (currentUser.id === disc.owner) return; // no-op for owners
-    setShowChat(true);
-    setTimeout(() => document.getElementById("chat-panel")?.scrollIntoView({ behavior: "smooth" }), 50);
-  };
 
   // Loading / error guards
   if (loading) {
@@ -142,7 +147,10 @@ export default function ListingDetail() {
             box-shadow:0 4px 10px rgba(0,0,0,0.05); padding:22px; text-align:center;
           }
           .errorMsg { color:#8c2f28; margin:0 0 10px; }
-          .btn { border:2px solid #141B4D; color:#141B4D; padding:10px 14px; border-radius:8px; font-weight:700; text-decoration:none; }
+          .btn {
+            border:2px solid #141B4D; color:#141B4D; padding:10px 14px; border-radius:8px;
+            font-weight:700; text-decoration:none;
+          }
           .btn:hover { background:#141B4D; color:#fff; }
           .btn-outline { background:#fff; }
         `}</style>
@@ -251,7 +259,6 @@ export default function ListingDetail() {
 
           <div className="seller">
             {seller?.avatar_url ? (
-              // small; native <img> avoids remote domain surprises
               // eslint-disable-next-line @next/next/no-img-element
               <img className="avatar" src={seller.avatar_url} alt={seller.full_name || "Seller"} />
             ) : (
@@ -268,9 +275,20 @@ export default function ListingDetail() {
               <Link className="btn btn-secondary" href="/account">Manage listing</Link>
             ) : (
               <>
-                <button className="btn btn-primary" onClick={handleMessageClick} disabled={disc.is_sold}>
-                  {disc.is_sold ? "Sold — messaging disabled" : "Message seller"}
-                </button>
+                {!disc.is_sold ? (
+                  <a
+                    className="btn btn-primary"
+                    href="#contact"
+                    onClick={(e) => {
+                      const el = document.getElementById("contact");
+                      if (el) { e.preventDefault(); el.scrollIntoView({ behavior: "smooth" }); }
+                    }}
+                  >
+                    Contact seller
+                  </a>
+                ) : (
+                  <button className="btn btn-primary" disabled>Sold — contact unavailable</button>
+                )}
                 <Link className="btn btn-secondary" href="/">Back to listings</Link>
               </>
             )}
@@ -285,37 +303,19 @@ export default function ListingDetail() {
         </section>
       ) : null}
 
-      <section className="chatwrap" id="chat-panel" aria-label="Chat with seller">
-        {currentUser ? (
-          currentUser.id === disc.owner ? (
-            <p className="muted">This is your listing.</p>
-          ) : (
-            <>
-              {showChat ? (
-                <ChatWindow currentUserId={currentUser.id} otherUserId={disc.owner} listingId={id} />
-              ) : (
-                <>
-                  <p className="muted" style={{ marginBottom: 12 }}>
-                    Want to ask about ink, dome, or trades? Start a conversation with the seller.
-                  </p>
-                  <button className="btn btn-primary" onClick={handleMessageClick} disabled={disc.is_sold}>
-                    {disc.is_sold ? "Sold — messaging disabled" : "Start conversation"}
-                  </button>
-                </>
-              )}
-            </>
-          )
-        ) : (
-          <>
-            <p className="muted" style={{ marginBottom: 12 }}>Sign in to message the seller.</p>
-            <button
-              className="btn btn-primary"
-              onClick={() => router.push(`/login?redirect=${encodeURIComponent(`/listings/${id}?openChat=1`)}`)}
-            >
-              Sign in with Google
-            </button>
-          </>
-        )}
+      <section className="chatwrap" aria-label="Contact" id="contact">
+        <ContactSeller
+          listingTitle={disc.title || "Disc listing"}
+          listingUrl={listingUrl}
+          seller={{
+            phone: seller?.phone || "",
+            email: seller?.public_email || "",   // maps to ContactSeller's `email`
+            messenger: seller?.messenger || "",
+          }}
+          allowSMS={true}
+          showCopy={true}
+          size="md"
+        />
       </section>
     </main>
   );
@@ -355,6 +355,7 @@ const styles = `
   .btn:focus { outline: none; box-shadow: 0 0 0 4px var(--tint); }
   .btn-primary { background: var(--teal); color: #fff; }
   .btn-primary:hover { background: var(--teal-dark); }
+  .btn-primary[disabled] { opacity:.6; cursor: not-allowed; }
   .btn-secondary { background: #fff; color: var(--storm); border: 2px solid var(--storm); }
   .btn-secondary:hover { background: var(--storm); color: #fff; }
   .btn-outline { background: #fff; color: var(--storm); border: 2px solid var(--storm); }

@@ -1,179 +1,385 @@
 // components/ChatWindow.js
-import { useEffect, useRef, useState } from "react";
+"use client";
+
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-/**
- * Use it 2 ways:
- *  - <ChatWindow otherUserId="..." listingId="...optional..." />
- *  - <ChatWindow threadId="..." />  (opens an existing thread)
- */
-export default function ChatWindow({ otherUserId = null, listingId = null, threadId: threadIdProp = null }) {
-  const [me, setMe] = useState(null);
-  const [threadId, setThreadId] = useState(threadIdProp);
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
-  const [loading, setLoading] = useState(true);
-  const endRef = useRef(null);
+function initials(name, fallback = "U") {
+  const s = (name || "").trim();
+  if (!s) return fallback;
+  const parts = s.split(/\s+/);
+  const a = parts[0]?.[0] || "";
+  const b = parts.length > 1 ? parts[1]?.[0] : "";
+  return (a + b).toUpperCase();
+}
 
-  // Auth
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setMe(data?.session?.user ?? null);
-    })();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setMe(session?.user ?? null));
-    return () => sub?.subscription?.unsubscribe?.();
+export default function ChatWindow({ currentUserId, otherUserId, listingId }) {
+  const [convId, setConvId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const [meProfile, setMeProfile] = useState({ name: "You", avatar_url: null });
+  const [otherProfile, setOtherProfile] = useState({
+    name: "User",
+    avatar_url: null,
+  });
+
+  const scrollerRef = useRef(null);
+
+  // stable pair for the conversation row (sorted a/b)
+  const [a, b] = useMemo(() => {
+    if (!currentUserId || !otherUserId) return [null, null];
+    return currentUserId < otherUserId
+      ? [currentUserId, otherUserId]
+      : [otherUserId, currentUserId];
+  }, [currentUserId, otherUserId]);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
   }, []);
 
-  // Find or create thread if needed
+  // fetch display names/avatars from profiles
   useEffect(() => {
-    if (!me) return;
     let cancelled = false;
-
-    async function ensureThread() {
-      if (threadIdProp) {
-        setThreadId(threadIdProp);
-        return;
+    (async () => {
+      try {
+        if (currentUserId) {
+          const { data: me } = await supabase
+            .from("profiles")
+            .select("full_name, avatar_url")
+            .eq("id", currentUserId)
+            .maybeSingle();
+          if (!cancelled && (me?.full_name || me?.avatar_url)) {
+            setMeProfile({
+              name: me?.full_name || "You",
+              avatar_url: me?.avatar_url || null,
+            });
+          }
+        }
+        if (otherUserId) {
+          const { data: other } = await supabase
+            .from("profiles")
+            .select("full_name, avatar_url")
+            .eq("id", otherUserId)
+            .maybeSingle();
+          if (!cancelled && (other?.full_name || other?.avatar_url)) {
+            setOtherProfile({
+              name: other?.full_name || "User",
+              avatar_url: other?.avatar_url || null,
+            });
+          }
+        }
+      } catch {
+        /* non-fatal */
       }
-      if (!otherUserId) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, otherUserId]);
 
-      // Try to find existing
-      const { data: existing, error: findErr } = await supabase
-        .from("threads")
-        .select("id")
-        .or(`and(a.eq.${me.id},b.eq.${otherUserId}),and(a.eq.${otherUserId},b.eq.${me.id})`)
-        .eq("listing_id", listingId ?? null)
-        .limit(1)
-        .maybeSingle();
-
-      if (findErr) console.error(findErr);
-      if (existing?.id) {
-        if (!cancelled) setThreadId(existing.id);
-        return;
-      }
-
-      // Create new
-      const payload = { a: me.id, b: otherUserId, listing_id: listingId ?? null };
-      const { data: created, error: insErr } = await supabase.from("threads").insert(payload).select("id").single();
-      if (insErr) {
-        console.error(insErr);
-        return;
-      }
-      if (!cancelled) setThreadId(created.id);
-    }
-
-    ensureThread();
-    return () => { cancelled = true; };
-  }, [me, otherUserId, listingId, threadIdProp]);
-
-  // Load messages + realtime
+  // create or fetch conversation
   useEffect(() => {
-    if (!threadId) return;
     let cancelled = false;
-    let channel;
+    (async () => {
+      if (!a || !b || !listingId) return;
+      setLoading(true);
+      setErrorMsg("");
+      try {
+        let { data: conv, error } = await supabase
+          .from("conversations")
+          .select("*")
+          .eq("listing_id", listingId)
+          .eq("user_a", a)
+          .eq("user_b", b)
+          .maybeSingle();
+        if (error) throw error;
+
+        if (!conv) {
+          const { data, error: insErr } = await supabase
+            .from("conversations")
+            .insert([{ listing_id: listingId, user_a: a, user_b: b }])
+            .select("*")
+            .single();
+          if (insErr) throw insErr;
+          conv = data;
+        }
+        if (!cancelled) setConvId(conv.id);
+      } catch (e) {
+        console.error(e);
+        if (!cancelled)
+          setErrorMsg(e?.message || "Failed to start conversation.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [a, b, listingId]);
+
+  // load messages + realtime
+  useEffect(() => {
+    if (!convId) return;
+    let cancelled = false;
 
     (async () => {
-      setLoading(true);
       const { data, error } = await supabase
         .from("messages")
         .select("*")
-        .eq("thread_id", threadId)
+        .eq("conversation_id", convId)
         .order("created_at", { ascending: true });
-      if (!cancelled) {
-        if (error) console.error(error);
+      if (cancelled) return;
+      if (error) {
+        setErrorMsg(error.message || "Failed to load messages.");
+      } else {
         setMessages(data || []);
-        setLoading(false);
-        scrollToEnd();
+        setTimeout(scrollToBottom, 0);
       }
-
-      // realtime sub
-      channel = supabase
-        .channel(`thread-${threadId}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "messages", filter: `thread_id=eq.${threadId}` },
-          (payload) => {
-            setMessages((prev) => [...prev, payload.new]);
-            scrollToEnd();
-          }
-        )
-        .subscribe();
     })();
 
+    const ch = supabase
+      .channel(`messages:${convId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${convId}`,
+        },
+        (payload) => {
+          setMessages((prev) => [...prev, payload.new]);
+          setTimeout(scrollToBottom, 0);
+        }
+      )
+      .subscribe();
+
     return () => {
+      supabase.removeChannel(ch);
       cancelled = true;
-      if (channel) supabase.removeChannel(channel);
     };
-  }, [threadId]);
+  }, [convId, scrollToBottom]);
 
-  function scrollToEnd() {
-    setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 20);
-  }
-
-  async function sendMessage(e) {
+  const onSend = async (e) => {
     e.preventDefault();
-    const body = text.trim();
-    if (!body || !me || !threadId) return;
-    setText("");
-    const { error } = await supabase.from("messages").insert({
-      thread_id: threadId,
-      sender: me.id,
-      body
-    });
+    if (!input.trim() || !convId || !currentUserId || !otherUserId) return;
+
+    const body = input.trim();
+    setInput("");
+    setSending(true);
+    setErrorMsg("");
+
+    // optimistic
+    const tempId = `tmp-${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      conversation_id: convId,
+      sender_id: currentUserId,
+      from_user: currentUserId, // legacy
+      to_user: otherUserId, // legacy
+      body,
+      created_at: new Date().toISOString(),
+      listing_id: listingId,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setTimeout(scrollToBottom, 0);
+
+    const payload = {
+      conversation_id: convId,
+      listing_id: listingId,
+      sender_id: currentUserId, // new
+      from_user: currentUserId, // legacy
+      to_user: otherUserId, // legacy
+      body,
+    };
+
+    const { data, error } = await supabase
+      .from("messages")
+      .insert([payload])
+      .select("*")
+      .single();
+
     if (error) {
-      console.error(error);
-      alert("Failed to send message: " + error.message);
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setErrorMsg(error.message || "Failed to send message.");
+      setInput(body);
+    } else {
+      setMessages((prev) => {
+        const withoutTemp = prev.filter((m) => m.id !== tempId);
+        const exists = withoutTemp.some((m) => m.id === data.id);
+        return exists ? withoutTemp : [...withoutTemp, data];
+      });
+      setTimeout(scrollToBottom, 0);
     }
-  }
+
+    setSending(false);
+  };
+
+  const me = currentUserId;
+  let lastSender = null;
 
   return (
     <div className="chat">
-      <style jsx>{`
-        .chat { border:1px solid #E9E9E9; border-radius:12px; overflow:hidden; background:#fff; display:flex; flex-direction:column; height:420px; }
-        .head { background:#F8F7EC; padding:10px 14px; font-weight:700; color:#141B4D; font-family:'Poppins',sans-serif; }
-        .list { flex:1; overflow:auto; padding: 12px; background:#fff; }
-        .row { margin: 8px 0; display:flex; }
-        .row.you { justify-content:flex-end; }
-        .bubble { max-width: 72%; padding:10px 12px; border-radius:12px; line-height:1.3; }
-        .me { background:#279989; color:#fff; border-top-right-radius:4px; }
-        .them { background:#ECF6F4; color:#141B4D; border-top-left-radius:4px; }
-        .meta { font-size:11px; color:#666; margin-top:4px; }
-        form { border-top:1px solid #E9E9E9; display:flex; gap:8px; padding:10px; background:#fff; }
-        input[type="text"] { flex:1; border:1px solid #E9E9E9; border-radius:10px; padding:10px 12px; }
-        input[type="text"]:focus { outline:none; border-color:#279989; box-shadow:0 0 0 4px #ECF6F4; }
-        button { background:#279989; color:#fff; border:none; border-radius:10px; padding:10px 14px; font-weight:700; }
-        button:hover { background:#1E7A6F; }
-      `}</style>
+      <style jsx>{styles}</style>
 
-      <div className="head">Conversation</div>
+      <header className="head">
+        {otherProfile.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className="avatar"
+            src={otherProfile.avatar_url}
+            alt={otherProfile.name}
+          />
+        ) : (
+          <div className="avatar avatar-fallback" aria-hidden>
+            {initials(otherProfile.name, "U")}
+          </div>
+        )}
+        <div className="title">
+          <div className="name">{otherProfile.name}</div>
+          <div className="sub">Private chat</div>
+        </div>
+      </header>
 
-      <div className="list">
-        {loading && <div className="meta">Loading messages…</div>}
-        {messages.map((m) => {
-          const mine = m.sender === me?.id;
-          return (
-            <div key={m.id} className={`row ${mine ? "you" : ""}`}>
-              <div className={`bubble ${mine ? "me" : "them"}`}>
-                <div>{m.body}</div>
-                <div className="meta">{new Date(m.created_at).toLocaleString()}</div>
-              </div>
-            </div>
-          );
-        })}
-        <div ref={endRef} />
+      <div
+        className="scroll"
+        ref={scrollerRef}
+        aria-live="polite"
+        aria-atomic="false"
+      >
+        {loading ? (
+          <div className="sys muted">Loading messages…</div>
+        ) : errorMsg ? (
+          <div className="sys error">{errorMsg}</div>
+        ) : messages.length === 0 ? (
+          <div className="sys muted">
+            Say hi and ask about ink, dome, or trades.
+          </div>
+        ) : (
+          messages.map((m, i) => {
+  const sender = m.sender_id ?? m.from_user;
+  const mine = sender === me;
+
+  const prev = messages[i - 1];
+  const prevSender = prev ? (prev.sender_id ?? prev.from_user) : null;
+
+  // Only show a label when the OTHER person starts a new block
+  const showLabel = !mine && sender !== prevSender;
+  const label = otherProfile.name || "User";
+
+  return (
+    <div key={m.id} className={`row ${mine ? "mine" : "theirs"}`}>
+      <div className="stack">
+        {showLabel && <div className="who">{label}</div>}
+        <div className="bubble">
+          <div className="text">{m.body}</div>
+          <div className="time">
+            {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+})
+        )}
       </div>
 
-      <form onSubmit={sendMessage}>
-        <input
-          type="text"
+      <form className="composer" onSubmit={onSend}>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
           placeholder="Type a message…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+          rows={1}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              onSend(e);
+            }
+          }}
         />
-        <button type="submit">Send</button>
+        <button
+          className="btn btn-primary"
+          type="submit"
+          disabled={!input.trim() || sending || !convId}
+        >
+          {sending ? "Sending…" : "Send"}
+        </button>
       </form>
     </div>
   );
 }
+
+const styles = `
+  /* brand tokens with safe fallbacks so this looks good even if vars aren't global */
+  :root {}
+  .chat {}
+  .head {
+    display:flex; align-items:center; gap:10px; margin-bottom: 8px;
+  }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
+    border: 2px solid rgba(0,0,0,0.06);
+  }
+  .avatar-fallback {
+    display:flex; align-items:center; justify-content:center;
+    background: var(--teal, #279989); color:#fff; font-weight: 800;
+  }
+  .title .name {
+    font-family:'Poppins',sans-serif; font-weight:600; color: var(--storm, #141B4D);
+  }
+  .title .sub { font-size:.85rem; color: #666; }
+
+  .scroll {
+    height: 300px; overflow:auto; border:1px solid var(--cloud, #E9E9E9);
+    border-radius:10px; padding:10px; background:#FAFAF7;
+  }
+  .sys { text-align:center; padding:10px; }
+  .muted { color:#666; }
+  .error {
+    display:inline-block; background:#fff5f4; border:1px solid #ffd9d5; color:#8c2f28;
+    border-radius:10px; padding:6px 10px;
+  }
+
+  .row { display:flex; width: 80%; margin: 10px 0; }
+
+  .row.mine { justify-content:flex-end; }
+  .row.theirs { justify-content:flex-start; }
+
+  .stack { max-width: 84%; display: flex; flex-direction: column; align-items: flex-start; }
+  .row.mine .stack { align-items: flex-end; }
+
+  .who {
+    font-size:.75rem; color:#777; margin:0 6px 4px;
+  }
+  .bubble {
+    background:#fff; border:1px solid var(--cloud, #E9E9E9);
+    border-radius:12px; padding:8px 10px; box-shadow:0 2px 6px rgba(0,0,0,0.05);
+  }
+  .row.mine .bubble {
+    background: var(--tint, #ECF6F4);
+    border-color: #D3EEEA;
+  }
+  .text { white-space: pre-wrap; color: var(--char, #3A3A3A); }
+  .time { text-align:right; font-size:.75rem; color:#777; margin-top:4px; }
+
+  .composer { display:flex; gap:8px; margin-top: 12px; }
+  .composer textarea {
+    flex:1; resize:none; min-height:40px; max-height:120px;
+    border:1px solid var(--cloud, #E9E9E9); border-radius:10px; padding:10px 12px;
+    font-size:15px; color: var(--char, #3A3A3A); outline:none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .composer textarea:focus { border-color: var(--teal, #279989); box-shadow: 0 0 0 4px var(--tint, #ECF6F4); }
+
+  .btn {
+    border:none; border-radius:10px; padding:10px 14px; font-weight:700; cursor:pointer;
+  }
+  .btn-primary { background: var(--teal, #279989); color:#fff; }
+  .btn-primary:hover { background: var(--teal-dark, #1E7A6F); }
+`;

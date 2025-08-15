@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { supabase } from "@/lib/supabaseClient";
+import ContactInfoCard from "@/components/ContactInfoCard";
 
 export default function Account() {
   const router = useRouter();
@@ -120,6 +121,7 @@ export default function Account() {
       <main className="wrap">
         <div className="titleRow">
           <h1>My Listings</h1>
+          {user && <ContactInfoCard userId={user.id} />}
           <Link href="/create-listing" className="btn btn-primary">Post a Disc</Link>
         </div>
 
