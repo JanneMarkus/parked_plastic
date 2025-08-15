@@ -48,6 +48,14 @@ export default function Home() {
   const [maxWeight, setMaxWeight] = useState("");
   const [includeSold, setIncludeSold] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [speedMin, setSpeedMin] = useState("");
+  const [speedMax, setSpeedMax] = useState("");
+  const [glideMin, setGlideMin] = useState("");
+  const [glideMax, setGlideMax] = useState("");
+  const [turnMin, setTurnMin] = useState("");
+  const [turnMax, setTurnMax] = useState("");
+  const [fadeMin, setFadeMin] = useState("");
+  const [fadeMax, setFadeMax] = useState("");
 
   // Blur placeholder cache
   const [blurs, setBlurs] = useState({});
@@ -62,7 +70,8 @@ export default function Home() {
       try {
         let query = supabase
           .from("discs")
-          .select("id,title,brand,mold,weight,condition,price,is_sold,image_urls,created_at")
+          // include flight number columns
+          .select("id,title,brand,mold,weight,condition,price,is_sold,image_urls,created_at,speed,glide,turn,fade")
           .order("created_at", { ascending: false });
 
         if (!includeSold) query = query.eq("is_sold", false);
@@ -95,6 +104,21 @@ export default function Home() {
         if (minW !== null && !Number.isNaN(minW)) query = query.gte("weight", minW);
         if (maxW !== null && !Number.isNaN(maxW)) query = query.lte("weight", maxW);
 
+        // Flight ranges helper
+        const rng = (val) => (val !== "" && val !== null ? Number(val) : null);
+        const sMin = rng(speedMin), sMax = rng(speedMax);
+        const gMin = rng(glideMin), gMax = rng(glideMax);
+        const tMin = rng(turnMin),  tMax = rng(turnMax);
+        const fMin = rng(fadeMin),  fMax = rng(fadeMax);
+        if (sMin !== null && !Number.isNaN(sMin)) query = query.gte("speed", sMin);
+        if (sMax !== null && !Number.isNaN(sMax)) query = query.lte("speed", sMax);
+        if (gMin !== null && !Number.isNaN(gMin)) query = query.gte("glide", gMin);
+        if (gMax !== null && !Number.isNaN(gMax)) query = query.lte("glide", gMax);
+        if (tMin !== null && !Number.isNaN(tMin)) query = query.gte("turn", tMin);
+        if (tMax !== null && !Number.isNaN(tMax)) query = query.lte("turn", tMax);
+        if (fMin !== null && !Number.isNaN(fMin)) query = query.gte("fade", fMin);
+        if (fMax !== null && !Number.isNaN(fMax)) query = query.lte("fade", fMax);
+
         const { data, error } = await query;
         if (error) throw error;
         if (!cancelled) setDiscs(data || []);
@@ -108,7 +132,14 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, brand, mold, condition, minPrice, maxPrice, minWeight, maxWeight, includeSold]);
+  }, [
+    debouncedSearch,
+    brand, mold, condition,
+    minPrice, maxPrice, minWeight, maxWeight,
+    // flight numbers
+    speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax,
+    includeSold
+  ]);
 
   // Prefetch blurDataURL
   useEffect(() => {
@@ -141,7 +172,12 @@ export default function Home() {
         includeSold ? "includeSold" : "",
       ].filter(Boolean).length + (debouncedSearch.trim() ? 1 : 0)
     );
-  }, [brand, mold, condition, minPrice, maxPrice, minWeight, maxWeight, debouncedSearch, includeSold]);
+  }, [
+    brand, mold, condition,
+    minPrice, maxPrice, minWeight, maxWeight,
+    speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax,
+    debouncedSearch, includeSold
+  ]);
 
   function resetFilters() {
     setSearch("");
@@ -317,6 +353,72 @@ export default function Home() {
                     inputMode="decimal"
                   />
                 </div>
+                
+                {/* ===== Flight number range filters ===== */}
+                <div className="pp-field flight">
+                  <label>Speed</label>
+                  <div className="row">
+                    <input
+                      className="pp-input"
+                      type="number" step="0.5" min={0} max={15} placeholder="Min"
+                      value={speedMin} onChange={(e)=>setSpeedMin(e.target.value)} inputMode="decimal"
+                    />
+                    <input
+                      className="pp-input"
+                      type="number" step="0.5" min={0} max={15} placeholder="Max"
+                      value={speedMax} onChange={(e)=>setSpeedMax(e.target.value)} inputMode="decimal"
+                    />
+                  </div>
+                </div>
+
+                <div className="pp-field flight">
+                  <label>Glide</label>
+                  <div className="row">
+                    <input
+                      className="pp-input"
+                      type="number" step="0.5" min={0} max={7} placeholder="Min"
+                      value={glideMin} onChange={(e)=>setGlideMin(e.target.value)} inputMode="decimal"
+                    />
+                    <input
+                      className="pp-input"
+                      type="number" step="0.5" min={0} max={7} placeholder="Max"
+                      value={glideMax} onChange={(e)=>setGlideMax(e.target.value)} inputMode="decimal"
+                    />
+                  </div>
+                </div>
+
+                <div className="pp-field flight">
+                  <label>Turn</label>
+                  <div className="row">
+                    <input
+                      className="pp-input"
+                      type="number" step="0.5" min={-5} max={5} placeholder="Min"
+                      value={turnMin} onChange={(e)=>setTurnMin(e.target.value)} inputMode="decimal"
+                    />
+                    <input
+                      className="pp-input"
+                      type="number" step="0.5" min={-5} max={5} placeholder="Max"
+                      value={turnMax} onChange={(e)=>setTurnMax(e.target.value)} inputMode="decimal"
+                    />
+                  </div>
+                </div>
+
+                <div className="pp-field flight">
+                  <label>Fade</label>
+                  <div className="row">
+                    <input
+                      className="pp-input"
+                      type="number" step="0.5" min={0} max={5} placeholder="Min"
+                      value={fadeMin} onChange={(e)=>setFadeMin(e.target.value)} inputMode="decimal"
+                    />
+                    <input
+                      className="pp-input"
+                      type="number" step="0.5" min={0} max={5} placeholder="Max"
+                      value={fadeMax} onChange={(e)=>setFadeMax(e.target.value)} inputMode="decimal"
+                    />
+                  </div>
+                </div>
+
 
                 <div className="toggles">
                   <label className="checkbox">
@@ -375,6 +477,12 @@ export default function Home() {
 
                 <div className="content">
                   <h2 className="cardTitle">{d.title}</h2>
+                  {/* Flight numbers compact line */}
+                  {d.speed != null && d.glide != null && d.turn != null && d.fade != null && (
+                    <div className="flightline" aria-label="Flight numbers">
+                      {d.speed} / {d.glide} / {d.turn} / {d.fade}
+                    </div>
+                  )}
                   <div className="meta">
                     {d.brand || "—"}
                     {d.mold ? ` • ${d.mold}` : ""}
@@ -434,6 +542,14 @@ export default function Home() {
           gap: 12px;
           grid-template-columns: repeat(1, minmax(0, 1fr));
           margin-top: 12px;
+        }
+
+        /* Flight filter rows */
+        .flight .row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          margin-top: 6px;
         }
 
         .checkbox {
@@ -526,6 +642,13 @@ export default function Home() {
           font-weight: 600;
           margin: 0;
           font-size: 1.05rem;
+        }
+        .flightline {
+          margin-top: -2px;
+          font-family: var(--font-source, system-ui);
+          font-size: 14px;
+          color: var(--storm);
+          opacity: 0.85;
         }
         .meta {
           font-size: 0.9rem;

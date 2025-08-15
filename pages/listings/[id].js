@@ -108,6 +108,10 @@ export default function ListingDetail() {
 
   const imgs = Array.isArray(disc?.image_urls) ? disc.image_urls.filter(Boolean) : [];
   const mainImg = imgs[mainIdx] || null;
+  const flightLine =
+    disc && disc.speed != null && disc.glide != null && disc.turn != null && disc.fade != null
+      ? `${disc.speed} / ${disc.glide} / ${disc.turn} / ${disc.fade}`
+      : null;
 
   // Loading / error guards
   if (loading) {
@@ -240,7 +244,6 @@ export default function ListingDetail() {
         <aside className="panel">
           <h1 className="title">{disc.title}</h1>
           <div className="meta">
-            {(disc.brand || "—")}{disc.mold ? ` • ${disc.mold}` : ""}{disc.plastic ? ` • ${disc.plastic}` : ""}
           </div>
 
           <div className="priceRow">
@@ -252,10 +255,17 @@ export default function ListingDetail() {
             <div className="spec"><label>Brand</label><div>{disc.brand || "—"}</div></div>
             <div className="spec"><label>Mold</label><div>{disc.mold || "—"}</div></div>
             <div className="spec"><label>Plastic</label><div>{disc.plastic || "—"}</div></div>
+            {flightLine && (
+              <div className="spec">
+                <label>Flight</label>
+                <div aria-label="Flight numbers">{flightLine}</div>
+              </div>
+            )}
             <div className="spec"><label>Weight</label><div>{disc.weight != null ? `${disc.weight} g` : "N/A"}</div></div>
             <div className="spec"><label>Condition</label><div>{disc.condition || "—"}</div></div>
             <div className="spec"><label>City</label><div>{disc.city || "Local"}</div></div>
           </div>
+
 
           <div className="seller">
             {seller?.avatar_url ? (

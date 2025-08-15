@@ -58,7 +58,7 @@ export default function ContactInfoCard({ userId }) {
       return "That email doesn’t look valid.";
     }
     if (form.phone && !/^\+?[0-9()\-\s]{7,20}$/.test(form.phone)) {
-      return "That phone number doesn’t look valid. Include country code (e.g., +17055551234).";
+      return "That phone number doesn’t look valid. Include country code (e.g., +18075551234).";
     }
     if (form.messenger && /[@\s]/.test(form.messenger)) {
       return "Messenger handle should not include spaces or @.";
@@ -131,7 +131,7 @@ export default function ContactInfoCard({ userId }) {
                 id="phone"
                 type="tel"
                 className="pp-input"
-                placeholder="+17055551234"
+                placeholder="+18075551234"
                 value={form.phone}
                 onChange={(e) => setField("phone", e.target.value)}
                 autoComplete="tel"

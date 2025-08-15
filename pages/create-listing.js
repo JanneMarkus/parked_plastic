@@ -16,6 +16,11 @@ export default function CreateListing() {
   // Auth gate
   const [checking, setChecking] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  // Flight numbers (REQUIRED)
+  const [speed, setSpeed] = useState("");
+  const [glide, setGlide] = useState("");
+  const [turn, setTurn] = useState("");
+  const [fade, setFade] = useState("");
 
   // Form state
   const [title, setTitle] = useState("");
@@ -224,6 +229,20 @@ export default function CreateListing() {
       return;
     }
 
+    // ---- Flight number validation (required, ranges, .5 step) ----
+    const stepIsValid = (v) => Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
+    const numOrNaN = (s) => (s === "" ? NaN : Number(s));
+    const s = numOrNaN(speed), g = numOrNaN(glide), t = numOrNaN(turn), f = numOrNaN(fade);
+    const flightErrors = [];
+    if (!Number.isFinite(s) || s < 0 || s > 15 || !stepIsValid(s)) flightErrors.push("Speed must be 0–15 in 0.5 steps.");
+    if (!Number.isFinite(g) || g < 0 || g > 7 || !stepIsValid(g))  flightErrors.push("Glide must be 0–7 in 0.5 steps.");
+    if (!Number.isFinite(t) || t < -5 || t > 5 || !stepIsValid(t)) flightErrors.push("Turn must be -5 to 5 in 0.5 steps.");
+    if (!Number.isFinite(f) || f < 0 || f > 5 || !stepIsValid(f))  flightErrors.push("Fade must be 0–5 in 0.5 steps.");
+    if (flightErrors.length) {
+      setErrorMsg(flightErrors[0]);
+      return;
+    }
+
     setLoading(true);
     try {
       // Upload images (sequential; keeps memory & bandwidth friendly)
@@ -253,6 +272,10 @@ export default function CreateListing() {
           city: null,
           owner: currentUser.id,
           is_sold: false,
+          speed: s,
+          glide: g,
+          turn: t,
+          fade: f,
         },
       ]);
       if (error) throw error;
@@ -269,6 +292,7 @@ export default function CreateListing() {
   }
 
   const canSubmit = useMemo(() => title.trim().length > 0 && !loading, [title, loading]);
+  // (We also gate in onSubmit; canSubmit keeps the button UX snappy)
 
   // ---------- UI ----------
   if (checking) {
@@ -336,6 +360,8 @@ export default function CreateListing() {
         <form onSubmit={handleSubmit}>
           {/* Mobile-first grid; becomes 2-col ≥768px */}
           <div className="grid2">
+
+
             {/* Title */}
             <div className="field span2">
               <label htmlFor="title">Title*</label>
@@ -373,6 +399,42 @@ export default function CreateListing() {
                 placeholder="Destroyer, Buzzz, Hex…"
                 autoComplete="off"
               />
+            </div>
+
+            {/* Flight Numbers (REQUIRED) */}
+            <div className="field span2">
+              <label>Flight Numbers*</label>
+              <div className="flightGrid">
+                <div className="flightField">
+                  <span className="ffLabel">Speed</span>
+                  <input
+                    type="number" step="0.5" min={0} max={15} required
+                    value={speed} onChange={(e)=>setSpeed(e.target.value)} inputMode="decimal" placeholder="e.g., 12"
+                  />
+                </div>
+                <div className="flightField">
+                  <span className="ffLabel">Glide</span>
+                  <input
+                    type="number" step="0.5" min={0} max={7} required
+                    value={glide} onChange={(e)=>setGlide(e.target.value)} inputMode="decimal" placeholder="e.g., 5"
+                  />
+                </div>
+                <div className="flightField">
+                  <span className="ffLabel">Turn</span>
+                  <input
+                    type="number" step="0.5" min={-5} max={5} required
+                    value={turn} onChange={(e)=>setTurn(e.target.value)} inputMode="decimal" placeholder="e.g., -1"
+                  />
+                </div>
+                <div className="flightField">
+                  <span className="ffLabel">Fade</span>
+                  <input
+                    type="number" step="0.5" min={0} max={5} required
+                    value={fade} onChange={(e)=>setFade(e.target.value)} inputMode="decimal" placeholder="e.g., 3"
+                  />
+                </div>
+              </div>
+              <p className="hintRow">Use 0.5 increments. Example format: 12 / 5 / -1 / 3</p>
             </div>
 
             {/* Plastic | Condition */}
@@ -618,6 +680,20 @@ const styles = `
     display: block;
   }
   .hintRow { color: #666; font-size: .85rem; margin-top: 6px; }
+
+  /* Flight numbers grid */
+  .flightGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  @media (min-width: 768px) {
+    .flightGrid { grid-template-columns: repeat(4, 1fr); }
+  }
+  .flightField { display: grid; gap: 6px; }
+  .ffLabel {
+    font-weight: 600; color: var(--storm); font-size: .9rem;
+  }
 
   .actions {
     display: flex; gap: 12px; justify-content: flex-end;

@@ -30,6 +30,11 @@ export default function EditListing() {
   const [city, setCity] = useState("Thunder Bay");
   const [description, setDescription] = useState("");
   const [isSold, setIsSold] = useState(false);
+  // Flight numbers
+  const [speed, setSpeed] = useState("");
+  const [glide, setGlide] = useState("");
+  const [turn, setTurn] = useState("");
+  const [fade, setFade] = useState("");
 
   // Images
   const [existingImages, setExistingImages] = useState([]); // from current listing
@@ -89,6 +94,11 @@ export default function EditListing() {
       setDescription(d.description || "");
       setIsSold(!!d.is_sold);
       setExistingImages(d.image_urls || []);
+      // Seed flight numbers (may be null on legacy rows)
+      setSpeed(d.speed ?? "");
+      setGlide(d.glide ?? "");
+      setTurn(d.turn ?? "");
+      setFade(d.fade ?? "");
       setLoading(false);
     })();
     return () => { active = false; };
@@ -239,6 +249,19 @@ export default function EditListing() {
       return;
     }
 
+    // Flight validation (required if missing; always validated for correctness)
+    const stepIsValid = (v) => Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
+    const numOrNaN = (s) => (s === "" ? NaN : Number(s));
+    const s = numOrNaN(speed), g = numOrNaN(glide), t = numOrNaN(turn), f = numOrNaN(fade);
+    const flightErrors = [];
+    if (!Number.isFinite(s) || s < 0 || s > 15 || !stepIsValid(s)) flightErrors.push("Speed must be 0–15 in 0.5 steps.");
+    if (!Number.isFinite(g) || g < 0 || g > 7 || !stepIsValid(g))  flightErrors.push("Glide must be 0–7 in 0.5 steps.");
+    if (!Number.isFinite(t) || t < -5 || t > 5 || !stepIsValid(t)) flightErrors.push("Turn must be -5 to 5 in 0.5 steps.");
+    if (!Number.isFinite(f) || f < 0 || f > 5 || !stepIsValid(f))  flightErrors.push("Fade must be 0–5 in 0.5 steps.");
+    if (flightErrors.length) {
+      setErrorMsg(flightErrors[0]);
+      return;
+    }
     // Validate numbers
     const weightNum = weight === "" ? null : Number(weight);
     if (weight !== "" && (Number.isNaN(weightNum) || weightNum < 120 || weightNum > 200)) {
@@ -278,6 +301,10 @@ export default function EditListing() {
           description: description.trim() || null,
           image_urls,
           is_sold: !!isSold,
+          speed: s,
+          glide: g,
+          turn: t,
+          fade: f,
         })
         .eq("id", disc.id);
 
@@ -352,6 +379,7 @@ export default function EditListing() {
       <div className="card">
         <form onSubmit={onSave}>
           <div className="grid2">
+            
             {/* Title */}
             <div className="field span2">
               <label htmlFor="title">Title*</label>
@@ -389,6 +417,42 @@ export default function EditListing() {
                 placeholder="Destroyer, Buzzz, Hex…"
                 autoComplete="off"
               />
+            </div>
+
+            {/* Flight Numbers (REQUIRED to add if missing on legacy) */}
+            <div className="field span2">
+              <label>Flight Numbers*</label>
+              <div className="flightGrid">
+                <div className="flightField">
+                  <span className="ffLabel">Speed</span>
+                  <input
+                    type="number" step="0.5" min={0} max={15} required
+                    value={speed} onChange={(e)=>setSpeed(e.target.value)} inputMode="decimal"
+                  />
+                </div>
+                <div className="flightField">
+                  <span className="ffLabel">Glide</span>
+                  <input
+                    type="number" step="0.5" min={0} max={7} required
+                    value={glide} onChange={(e)=>setGlide(e.target.value)} inputMode="decimal"
+                  />
+                </div>
+                <div className="flightField">
+                  <span className="ffLabel">Turn</span>
+                  <input
+                    type="number" step="0.5" min={-5} max={5} required
+                    value={turn} onChange={(e)=>setTurn(e.target.value)} inputMode="decimal"
+                  />
+                </div>
+                <div className="flightField">
+                  <span className="ffLabel">Fade</span>
+                  <input
+                    type="number" step="0.5" min={0} max={5} required
+                    value={fade} onChange={(e)=>setFade(e.target.value)} inputMode="decimal"
+                  />
+                </div>
+              </div>
+              <p className="hintRow">Use 0.5 increments. Example: 12 / 5 / -1 / 3</p>
             </div>
 
             {/* Plastic | Condition (text to mirror create form) */}
@@ -658,6 +722,20 @@ const styles = `
     display: block;
   }
   .hintRow { color: #666; font-size: .85rem; margin-top: 6px; }
+
+  /* Flight numbers grid */
+  .flightGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  @media (min-width: 768px) {
+    .flightGrid { grid-template-columns: repeat(4, 1fr); }
+  }
+  .flightField { display: grid; gap: 6px; }
+  .ffLabel {
+    font-weight: 600; color: var(--storm); font-size: .9rem;
+  }
 
   .actions {
     display: flex; gap: 12px; justify-content: flex-end;
