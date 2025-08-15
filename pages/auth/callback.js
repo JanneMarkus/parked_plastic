@@ -11,6 +11,16 @@ function sanitizeRedirectPath(raw) {
   return raw.startsWith("/") ? raw : "/";
 }
 
+async function upsertProfile(user) {
+  const payload = {
+    id: user.id,
+    full_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
+    avatar_url: user.user_metadata?.avatar_url || null,
+  };
+  const { error } = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
+  if (error) throw error;
+}
+
 export default function AuthCallback() {
   const router = useRouter();
   const [msg, setMsg] = useState("Finishing sign-in…");
@@ -20,30 +30,40 @@ export default function AuthCallback() {
     let active = true;
     (async () => {
       if (typeof window === "undefined") return;
-
-      // Figure out where to go next
       const url = new URL(window.location.href);
       const next = sanitizeRedirectPath(url.searchParams.get("redirect") || "/");
 
       try {
-        // 1) PKCE code flow (?code=...)
+        // Prefer modern PKCE: ?code=...
         const code = url.searchParams.get("code");
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession({ code });
           if (error) throw error;
         }
-        // 2) Implicit flow (#access_token=...)
+
+        // Fallback: legacy implicit flow with tokens in the hash
         if (window.location.hash.includes("access_token")) {
-          // Parse & store session from the URL hash
-          const { error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
-          if (error) throw error;
+          const hash = new URLSearchParams(window.location.hash.slice(1));
+          const access_token = hash.get("access_token");
+          const refresh_token = hash.get("refresh_token");
+          if (access_token && refresh_token) {
+            const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (error) throw error;
+          } else {
+            throw new Error("Missing access_token/refresh_token in callback hash.");
+          }
         }
+
+        // Ensure a profile row exists
+        const { data: sess } = await supabase.auth.getSession();
+        const user = sess?.session?.user || null;
+        if (user) await upsertProfile(user);
+
         setMsg("Signed in. Redirecting…");
-        // Clean URL then go to intended page
         window.history.replaceState({}, "", next);
         if (active) router.replace(next);
       } catch (e) {
-        console.error(e);
+        console.error("Auth callback error:", e);
         setErr(e?.message || "Could not complete sign-in.");
         setMsg("");
       }

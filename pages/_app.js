@@ -20,17 +20,23 @@ const source = Source_Sans_3({
   variable: "--font-source",
 });
 
+async function upsertProfile(user) {
+  const payload = {
+    id: user.id,
+    full_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
+    avatar_url: user.user_metadata?.avatar_url || null,
+  };
+  const { error } = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
+  if (error) throw error;
+}
+
 export default function MyApp({ Component, pageProps }) {
-  // Upsert minimal profile on sign-in
   useEffect(() => {
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const user = session?.user;
       if (user) {
-        await supabase.from("profiles").upsert({
-          id: user.id,
-          full_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
-          avatar_url: user.user_metadata?.avatar_url || null,
-        });
+        try { await upsertProfile(user); }
+        catch (e) { console.warn("Profile upsert failed:", e?.message || e); }
       }
     });
     return () => listener?.subscription?.unsubscribe?.();
