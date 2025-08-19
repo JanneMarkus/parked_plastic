@@ -211,7 +211,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Parked Plastic — Disc Listings</title>
+        <title>Parked Plastic — Local Disc Listings</title>
         <meta
           name="description"
           content="Browse used disc golf listings. Filter by brand, mold, condition, weight, and price — or search everything."

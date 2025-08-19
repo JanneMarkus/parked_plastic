@@ -211,9 +211,9 @@ export default function Header() {
           <Link href="/" className="mobileLink" onClick={() => setMenuOpen(false)}>
             Browse
           </Link>
-          <button className="mobileLink asButton" onClick={handlePostClick}>
-            Post a Disc
-          </button>
+          <Link href="/account" className="mobileLink" onClick={() => setMenuOpen(false)}>
+            Manage Listings
+          </Link>
 
           <div className="mobileDivider" />
 
@@ -252,7 +252,7 @@ export default function Header() {
               </button>
             </>
           ) : (
-            <Link href="/login" className="btnOutline full" onClick={() => setMenuOpen(false)}>
+            <Link href="/login" className="mobileLink" onClick={() => setMenuOpen(false)}>
               Sign in
             </Link>
           )}
@@ -462,6 +462,16 @@ export default function Header() {
           max-width: 640px;
           margin: 0 auto;
         }
+
+        /* Mobile menu color fixes */
+        .mobileMenu,
+        .mobileInner {
+          color: var(--storm-blue);
+        }
+        .mobileUser .whoHint { color: var(--soft-charcoal); opacity: 0.9; }
+        .mobileUser .whoName { color: var(--storm-blue); }
+
+        /* Mobile links and buttons inside sheet */
         .mobileLink {
           display: inline-flex;
           align-items: center;
@@ -474,6 +484,8 @@ export default function Header() {
           border: 1px solid var(--cloud-grey);
           background: #fff;
         }
+        .mobileLink:hover { background: #fdfdfb; }
+
         .mobileLink.asButton {
           cursor: pointer;
           border: 2px solid var(--caribbean-sea);
@@ -485,6 +497,18 @@ export default function Header() {
           outline: none;
           box-shadow: 0 0 0 4px var(--light-teal-tint);
         }
+
+        /* Override the dark-header .btnOutline style ONLY inside the mobile sheet */
+        .mobileMenu :global(.btnOutline) {
+          border-color: var(--storm-blue);
+          color: var(--storm-blue);
+          background: #fff;
+        }
+        .mobileMenu :global(.btnOutline:hover) {
+          background: var(--storm-blue);
+          color: #fff;
+        }
+
         .mobileDivider {
           height: 1px;
           background: var(--cloud-grey);
