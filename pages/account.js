@@ -9,6 +9,8 @@ import ContactInfoCard from "@/components/ContactInfoCard";
 
 /* ------------------------- Small helpers/components ------------------------ */
 
+const CAD = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
+
 function StatusTabs({ value, counts, onChange }) {
   return (
     <div className="pp-tabs" role="tablist" aria-label="Filter listings by status">
@@ -81,7 +83,7 @@ function StatusTabs({ value, counts, onChange }) {
 function ListingCard({ l, onToggleSold, onDelete }) {
   const price =
     l.price != null && Number.isFinite(Number(l.price))
-      ? `$${Number(l.price).toFixed(2)}`
+      ? CAD.format(Number(l.price))
       : null;
 
   return (
@@ -225,6 +227,7 @@ export default function Account() {
   // Auth gate
   useEffect(() => {
     let active = true;
+
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (!active) return;
@@ -233,10 +236,17 @@ export default function Account() {
       setReady(true);
       if (!u) router.replace(`/login?redirect=${encodeURIComponent("/account")}`);
     })();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
     });
-    return () => sub?.subscription?.unsubscribe?.();
+
+    return () => {
+      subscription?.unsubscribe?.();
+      active = false;
+    };
   }, [router]);
 
   // Load listings
@@ -258,6 +268,7 @@ export default function Account() {
         if (error) throw error;
         if (!cancelled) setListings(data || []);
       } catch (e) {
+        // eslint-disable-next-line no-console
         console.error(e);
         if (!cancelled) {
           setErrorMsg("Failed to load your listings.");

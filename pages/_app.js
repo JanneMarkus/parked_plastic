@@ -22,17 +22,37 @@ const source = Source_Sans_3({
 
 export default function MyApp({ Component, pageProps }) {
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const user = session?.user;
-      if (user) {
+      if (!user) return;
+
+      // With email/password, user_metadata may be mostly empty.
+      // Fall back to a sensible display name from email.
+      const emailName =
+        typeof user.email === "string" ? user.email.split("@")[0] : null;
+
+      try {
         await supabase.from("profiles").upsert({
           id: user.id,
-          full_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
+          full_name:
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            emailName ||
+            null,
           avatar_url: user.user_metadata?.avatar_url || null,
         });
+      } catch (e) {
+        // Non-blocking: avoid crashing the app on profile upsert hiccups.
+        // eslint-disable-next-line no-console
+        console.warn("Failed to upsert profile", e);
       }
     });
-    return () => listener?.subscription?.unsubscribe?.();
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   return (

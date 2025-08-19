@@ -15,10 +15,12 @@ export default function Header() {
 
   useEffect(() => {
     let mounted = true;
-    async function init() {
+
+    async function readUserAndProfile() {
       const { data } = await supabase.auth.getUser();
       const u = data?.user ?? null;
       if (!mounted) return;
+
       setUser(u);
 
       if (u) {
@@ -26,12 +28,13 @@ export default function Header() {
           .from("profiles")
           .select("full_name, avatar_url")
           .eq("id", u.id)
-          .single();
+          .maybeSingle();
         setProfile({
           full_name:
             p?.full_name ||
             u.user_metadata?.full_name ||
             u.user_metadata?.name ||
+            (typeof u.email === "string" ? u.email.split("@")[0] : null) ||
             null,
           avatar_url: p?.avatar_url || u.user_metadata?.avatar_url || null,
         });
@@ -39,9 +42,12 @@ export default function Header() {
         setProfile({ full_name: null, avatar_url: null });
       }
     }
-    init();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    readUserAndProfile();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
@@ -49,12 +55,13 @@ export default function Header() {
           .from("profiles")
           .select("full_name, avatar_url")
           .eq("id", u.id)
-          .single();
+          .maybeSingle();
         setProfile({
           full_name:
             p?.full_name ||
             u.user_metadata?.full_name ||
             u.user_metadata?.name ||
+            (typeof u.email === "string" ? u.email.split("@")[0] : null) ||
             null,
           avatar_url: p?.avatar_url || u.user_metadata?.avatar_url || null,
         });
@@ -65,7 +72,7 @@ export default function Header() {
 
     return () => {
       mounted = false;
-      sub?.subscription?.unsubscribe?.();
+      subscription?.unsubscribe?.();
     };
   }, []);
 
@@ -276,8 +283,8 @@ export default function Header() {
           display: grid;
           grid-template-columns: auto 1fr auto; /* Logo | center grows | right (hamburger) */
           align-items: center;
-          gap: 10px; /* breathing room between items */
-          padding: 0 10px; /* tighter side padding on narrow screens */
+          gap: 10px;
+          padding: 0 10px;
           box-shadow: 0 2px 8px rgba(0,0,0,0.15);
           font-family: var(--font-poppins, Poppins), system-ui, sans-serif;
         }
@@ -305,7 +312,7 @@ export default function Header() {
           background: var(--caribbean-sea);
           color: #fff;
           border-radius: 8px;
-          padding: 8px 14px; /* slightly smaller on mobile */
+          padding: 8px 14px;
           font-weight: 700;
           border: none;
           cursor: pointer;
@@ -494,7 +501,7 @@ export default function Header() {
         /* DESKTOP ≥768px */
         @media (min-width: 768px) {
           .header {
-            grid-template-columns: auto 1fr auto; /* same, but we show desktop bits */
+            grid-template-columns: auto 1fr auto;
             padding: 0 24px;
             gap: 16px;
           }

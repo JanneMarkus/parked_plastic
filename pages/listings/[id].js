@@ -38,10 +38,15 @@ export default function ListingDetail() {
       if (!mounted) return;
       setCurrentUser(data?.session?.user ?? null);
     })();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_e, session) => {
       setCurrentUser(session?.user ?? null);
     });
-    return () => sub?.subscription?.unsubscribe?.();
+    return () => {
+      subscription?.unsubscribe?.();
+      mounted = false;
+    };
   }, []);
 
   // Load listing + seller profile
@@ -71,11 +76,19 @@ export default function ListingDetail() {
             .maybeSingle();
           if (active) {
             setSeller(
-              p || { id: d.owner, full_name: null, avatar_url: null, public_email: null, phone: null, messenger: null }
+              p || {
+                id: d.owner,
+                full_name: null,
+                avatar_url: null,
+                public_email: null,
+                phone: null,
+                messenger: null,
+              }
             );
           }
         }
       } catch (e) {
+        // eslint-disable-next-line no-console
         console.error(e);
         if (active) setErrorMsg("This listing could not be loaded.");
       } finally {
@@ -266,7 +279,6 @@ export default function ListingDetail() {
             <div className="spec"><label>City</label><div>{disc.city || "Local"}</div></div>
           </div>
 
-
           <div className="seller">
             {seller?.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -319,7 +331,7 @@ export default function ListingDetail() {
           listingUrl={listingUrl}
           seller={{
             phone: seller?.phone || "",
-            email: seller?.public_email || "",   // maps to ContactSeller's `email`
+            public_email: seller?.public_email || "",
             messenger: seller?.messenger || "",
           }}
           allowSMS={true}

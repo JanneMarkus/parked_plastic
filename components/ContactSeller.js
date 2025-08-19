@@ -1,10 +1,31 @@
 // components/ContactSeller.js
 import React from "react";
-import { Phone, MessageSquareText, Mail, Copy, ExternalLink } from "lucide-react";
+import { MessageSquareText, Mail, Copy, ExternalLink, Info } from "lucide-react";
 
 function encodeMessage(title, url) {
   const msg = `Hi! I'm interested in your listing: ${title} — ${url}`;
   return encodeURIComponent(msg);
+}
+
+function cleanMessenger(handle = "") {
+  // Accept full URLs or handles; return bare handle for m.me
+  let h = String(handle).trim();
+  if (!h) return "";
+  // strip URL prefix if present
+  h = h.replace(/^https?:\/\/(www\.)?m\.me\//i, "");
+  h = h.replace(/^https?:\/\/(www\.)?facebook\.com\//i, "");
+  // remove @ and whitespace
+  h = h.replace(/^@+/, "").replace(/\s+/g, "");
+  return h;
+}
+
+function cleanPhone(raw = "") {
+  // Keep leading +, then digits only
+  const s = String(raw).trim();
+  if (!s) return "";
+  const plus = s.startsWith("+") ? "+" : "";
+  const digits = s.replace(/[^\d]/g, "");
+  return plus + digits;
 }
 
 export default function ContactSeller({
@@ -16,31 +37,37 @@ export default function ContactSeller({
   size = "md", // "sm" | "md" | "lg"
 }) {
   const email = seller?.email || seller?.public_email || "";
+  const messenger = cleanMessenger(seller?.messenger || "");
+  const phone = cleanPhone(seller?.phone || "");
   const msg = encodeMessage(listingTitle, listingUrl);
 
   const actions = [
-    seller?.messenger && {
+    messenger && {
       key: "messenger",
       label: "Messenger",
-      href: `https://m.me/${seller.messenger}`,
+      href: `https://m.me/${messenger}`,
       icon: <ExternalLink size={18} aria-hidden />,
       primary: true,
       target: "_blank",
       rel: "noopener noreferrer",
     },
-    allowSMS && seller?.phone && {
+    allowSMS && phone && {
       key: "sms",
       label: "Text",
-      href: `sms:${seller.phone}?&body=${msg}`,
+      href: `sms:${phone}?body=${msg}`,
       icon: <MessageSquareText size={18} aria-hidden />,
+      target: undefined,
+      rel: undefined,
     },
     email && {
       key: "email",
       label: "Email",
-      href: `mailto:${email}?subject=${encodeURIComponent(
+      href: `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(
         `Interested in: ${listingTitle}`
       )}&body=${msg}`,
       icon: <Mail size={18} aria-hidden />,
+      target: undefined,
+      rel: undefined,
     },
   ].filter(Boolean);
 
@@ -121,17 +148,29 @@ export default function ContactSeller({
           color: #fff;
         }
 
-        /* Actions layout — this fixes spacing */
+        /* Actions layout */
         .cs-actions {
           display: flex;
           flex-wrap: wrap;
-          gap: 10px; /* consistent space between all buttons */
+          gap: 10px;
         }
 
         .cs-tip {
           margin-top: 10px;
           color: var(--char, #3A3A3A);
           font-size: 0.9rem;
+        }
+
+        .empty {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: #fffdf5;
+          border: 1px solid #ffe7b3;
+          color: #7a5b00;
+          font-size: 0.95rem;
         }
       `}</style>
 
@@ -150,25 +189,33 @@ export default function ContactSeller({
         )}
       </div>
 
-      <div className="cs-actions">
-        {actions.map((a) => (
-          <a
-            key={a.key}
-            href={a.href}
-            target={a.target}
-            rel={a.rel}
-            className={`btn ${a.primary ? "primary" : ""} ${sizeClass}`}
-          >
-            {a.icon}
-            <span>{a.label}</span>
-          </a>
-        ))}
-      </div>
-
-      <p className="cs-tip">
-        Tip: On mobile, these open your apps directly. On desktop, they open your
-        default handlers.
-      </p>
+      {actions.length > 0 ? (
+        <>
+          <div className="cs-actions">
+            {actions.map((a) => (
+              <a
+                key={a.key}
+                href={a.href}
+                target={a.target}
+                rel={a.rel}
+                className={`btn ${a.primary ? "primary" : ""} ${sizeClass}`}
+              >
+                {a.icon}
+                <span>{a.label}</span>
+              </a>
+            ))}
+          </div>
+          <p className="cs-tip">
+            Tip: On mobile, these open your apps directly. On desktop, they open your
+            default handlers.
+          </p>
+        </>
+      ) : (
+        <div className="empty" role="note" aria-live="polite">
+          <Info size={16} aria-hidden />
+          The seller hasn’t added contact info yet.
+        </div>
+      )}
     </section>
   );
 }

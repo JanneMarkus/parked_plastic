@@ -18,11 +18,11 @@ const sourceSans = Source_Sans_3({
   subsets: ["latin"],
   weight: ["400", "600"],
   display: "swap",
-  // Match GlobalStyles expectation of --font-source
   variable: "--font-source",
 });
 
 const CONDITION_OPTIONS = ["New", "Like New", "Excellent", "Good", "Used", "Beat"];
+const CAD = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
 
 function useDebouncedValue(value, delay = 450) {
   const [debounced, setDebounced] = useState(value);
@@ -70,7 +70,6 @@ export default function Home() {
       try {
         let query = supabase
           .from("discs")
-          // include flight number columns
           .select("id,title,brand,mold,weight,condition,price,is_sold,image_urls,created_at,speed,glide,turn,fade")
           .order("created_at", { ascending: false });
 
@@ -104,7 +103,7 @@ export default function Home() {
         if (minW !== null && !Number.isNaN(minW)) query = query.gte("weight", minW);
         if (maxW !== null && !Number.isNaN(maxW)) query = query.lte("weight", maxW);
 
-        // Flight ranges helper
+        // Flight ranges
         const rng = (val) => (val !== "" && val !== null ? Number(val) : null);
         const sMin = rng(speedMin), sMax = rng(speedMax);
         const gMin = rng(glideMin), gMax = rng(glideMax);
@@ -123,6 +122,7 @@ export default function Home() {
         if (error) throw error;
         if (!cancelled) setDiscs(data || []);
       } catch (e) {
+        // eslint-disable-next-line no-console
         console.error(e);
         if (!cancelled) setDiscs([]);
       } finally {
@@ -136,7 +136,6 @@ export default function Home() {
     debouncedSearch,
     brand, mold, condition,
     minPrice, maxPrice, minWeight, maxWeight,
-    // flight numbers
     speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax,
     includeSold
   ]);
@@ -160,18 +159,28 @@ export default function Home() {
   }, [discs, blurs]);
 
   const activeFiltersCount = useMemo(() => {
-    return (
-      [
-        brand.trim(),
-        mold.trim(),
-        condition,
-        minPrice !== "" ? "minPrice" : "",
-        maxPrice !== "" ? "maxPrice" : "",
-        minWeight !== "" ? "minWeight" : "",
-        maxWeight !== "" ? "maxWeight" : "",
-        includeSold ? "includeSold" : "",
-      ].filter(Boolean).length + (debouncedSearch.trim() ? 1 : 0)
-    );
+    const basics = [
+      brand.trim(),
+      mold.trim(),
+      condition,
+      minPrice !== "" ? "minPrice" : "",
+      maxPrice !== "" ? "maxPrice" : "",
+      minWeight !== "" ? "minWeight" : "",
+      maxWeight !== "" ? "maxWeight" : "",
+      includeSold ? "includeSold" : "",
+      debouncedSearch.trim() ? "q" : "",
+    ];
+    const flight = [
+      speedMin !== "" ? "sMin" : "",
+      speedMax !== "" ? "sMax" : "",
+      glideMin !== "" ? "gMin" : "",
+      glideMax !== "" ? "gMax" : "",
+      turnMin !== "" ? "tMin" : "",
+      turnMax !== "" ? "tMax" : "",
+      fadeMin !== "" ? "fMin" : "",
+      fadeMax !== "" ? "fMax" : "",
+    ];
+    return [...basics, ...flight].filter(Boolean).length;
   }, [
     brand, mold, condition,
     minPrice, maxPrice, minWeight, maxWeight,
@@ -188,6 +197,14 @@ export default function Home() {
     setMaxPrice("");
     setMinWeight("");
     setMaxWeight("");
+    setSpeedMin("");
+    setSpeedMax("");
+    setGlideMin("");
+    setGlideMax("");
+    setTurnMin("");
+    setTurnMax("");
+    setFadeMin("");
+    setFadeMax("");
     setIncludeSold(false);
   }
 
@@ -353,7 +370,7 @@ export default function Home() {
                     inputMode="decimal"
                   />
                 </div>
-                
+
                 {/* ===== Flight number range filters ===== */}
                 <div className="pp-field flight">
                   <label>Speed</label>
@@ -419,7 +436,6 @@ export default function Home() {
                   </div>
                 </div>
 
-
                 <div className="toggles">
                   <label className="checkbox">
                     <input
@@ -445,7 +461,7 @@ export default function Home() {
             const src = d.image_urls?.[0];
             const hasImage = !!src;
             const price =
-              d.price != null && Number.isFinite(Number(d.price)) ? `$${Number(d.price).toFixed(2)}` : null;
+              d.price != null && Number.isFinite(Number(d.price)) ? CAD.format(Number(d.price)) : null;
 
             return (
               <Link
@@ -578,7 +594,7 @@ export default function Home() {
         }
         .listing-card {
           position: relative;
-          overflow: hidden; /* clip rounded corners for image */
+          overflow: hidden;
           display: flex;
           flex-direction: column;
           text-decoration: none;
@@ -673,23 +689,14 @@ export default function Home() {
 
         /* Responsive layout */
         @media (min-width: 480px) {
-          .pageTitle {
-            font-size: 1.8rem;
-          }
-          .filters {
-            padding: 14px;
-          }
+          .pageTitle { font-size: 1.8rem; }
+          .filters { padding: 14px; }
         }
         @media (min-width: 768px) {
-          .pageTitle {
-            font-size: 2rem;
-            margin-bottom: 2px;
-          }
+          .pageTitle { font-size: 2rem; margin-bottom: 2px; }
         }
         @media (min-width: 1200px) {
-          .pageTitle {
-            font-size: 2.2rem;
-          }
+          .pageTitle { font-size: 2.2rem; }
         }
       `}</style>
     </>

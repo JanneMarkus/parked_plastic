@@ -6,134 +6,356 @@ import { supabase } from "@/lib/supabaseClient";
 
 function sanitizeRedirectPath(raw) {
   if (typeof raw !== "string") return "/";
-  // Disallow protocol/host and scheme-relative URLs to prevent open-redirects.
   if (raw.startsWith("//")) return "/";
   if (/^[a-zA-Z]+:\/\//.test(raw)) return "/";
   return raw.startsWith("/") ? raw : "/";
 }
 
+const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+
 export default function Login() {
   const router = useRouter();
-  const rawRedirect = typeof router.query.redirect === "string" ? router.query.redirect : "/";
+  const rawRedirect =
+    typeof router.query.redirect === "string" ? router.query.redirect : "/";
   const nextPath = useMemo(() => sanitizeRedirectPath(rawRedirect), [rawRedirect]);
 
   const [checking, setChecking] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [signedInUser, setSignedInUser] = useState(null);
 
-  // If already signed in, bounce to nextPath.
+  const [mode, setMode] = useState("signin"); // 'signin' | 'signup' | 'forgot'
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // For “resend confirmation”
+  const [resending, setResending] = useState(false);
+  const [canResendConfirm, setCanResendConfirm] = useState(false);
+
+  // If already signed in, show “continue” + “sign out”
   useEffect(() => {
-  let active = true;
-  (async () => {
-    try {
-      const { data } = await supabase.auth.getUser();
-      if (!active) return;
-      setSignedInUser(data?.user ?? null); // don't auto-redirect; let user choose
-    } catch (e) {
-      // show login UI
-    } finally {
-      if (active) setChecking(false);
+    let active = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        if (!active) return;
+        setSignedInUser(data?.user ?? null);
+      } catch {
+        // show login UI
+      } finally {
+        if (active) setChecking(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const canSubmit = useMemo(() => {
+    const eOk = isValidEmail(email);
+    if (mode === "forgot") return eOk && !submitting && !checking;
+    if (mode === "signup" || mode === "signin") {
+      const pOk = String(password || "").trim().length >= 6;
+      return eOk && pOk && !submitting && !checking;
     }
-  })();
-  return () => { active = false; };
-}, []);
+    return false;
+  }, [mode, email, password, submitting, checking]);
 
-  const signInWithGoogle = async (forceAccountSelection = false) => {
-  setErrorMsg("");
-  setSubmitting(true);
-  try {
-    const origin =
-      typeof window !== "undefined" && window.location?.origin
-        ? window.location.origin
-        : undefined;
-
-    const redirectTo =
-      origin != null
-        ? `${origin}/login?redirect=${encodeURIComponent(nextPath)}`
-        : undefined;
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo,
-        queryParams: forceAccountSelection ? { prompt: "select_account" } : undefined,
-      },
-    });
-    if (error) throw error;
-  } catch (e) {
-    setErrorMsg(e?.message || "Sign-in failed. Please try again.");
-    setSubmitting(false);
+  async function resendConfirmation(targetEmail) {
+    setResending(true);
+    setErrorMsg("");
+    setInfoMsg("");
+    try {
+      const clean = String(targetEmail || email).trim();
+      if (!isValidEmail(clean)) throw new Error("Enter a valid email to resend.");
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: clean,
+        options: {
+          emailRedirectTo:
+            (typeof window !== "undefined" && window.location?.origin)
+              ? `${window.location.origin}/login?redirect=${encodeURIComponent(nextPath)}`
+              : undefined,
+        },
+      });
+      if (error) throw error;
+      setInfoMsg("Confirmation email re-sent. Check your inbox.");
+      setCanResendConfirm(false);
+    } catch (e) {
+      setErrorMsg(e?.message || "Couldn’t resend confirmation.");
+    } finally {
+      setResending(false);
+    }
   }
-};
 
-const signInDifferent = async () => {
-  try {
-    await supabase.auth.signOut(); // clear current Supabase session
-  } catch {}
-  // Force Google's account chooser
-  await signInWithGoogle(true);
-};
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg("");
+    setInfoMsg("");
+    setCanResendConfirm(false);
+    setSubmitting(true);
 
+    try {
+      const origin =
+        typeof window !== "undefined" && window.location?.origin
+          ? window.location.origin
+          : process.env.NEXT_PUBLIC_SITE_URL;
+
+      const cleanEmail = String(email).trim();
+      const cleanPassword = String(password).trim();
+
+      if (mode === "signin") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: cleanPassword,
+        });
+        if (error) throw error;
+        router.replace(nextPath);
+        return;
+      }
+
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password: cleanPassword,
+          options: {
+            emailRedirectTo:
+              origin != null
+                ? `${origin}/login?redirect=${encodeURIComponent(nextPath)}`
+                : undefined,
+          },
+        });
+
+        if (error) {
+          const raw = String(error?.message || "");
+          // Handle “already registered” nicely
+          if (/already registered/i.test(raw) || error?.code === "user_already_registered") {
+            setMode("signin");
+            setInfoMsg("That email is already registered. Sign in below or use “Forgot your password?”.");
+            return;
+          }
+          // If provider says email not confirmed yet, offer a resend
+          if (/email not confirmed/i.test(raw) || error?.code === "email_not_confirmed") {
+            setMode("signin");
+            setInfoMsg("Your email isn’t confirmed yet. We can resend the confirmation email.");
+            setCanResendConfirm(true);
+            return;
+          }
+          throw error;
+        }
+
+        // Confirmations ON → no immediate session; email will be sent.
+        if (!data.session) {
+          setInfoMsg("Check your inbox to confirm your account. After verification, sign in here.");
+          setMode("signin");
+        } else {
+          router.replace(nextPath);
+        }
+        return;
+      }
+
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: origin != null ? `${origin}/reset-password` : undefined,
+        });
+        if (error) throw error;
+        setInfoMsg("If that email exists, a password reset link has been sent.");
+        setMode("signin");
+        return;
+      }
+    } catch (e) {
+      const raw = String(e?.message || "");
+      let msg = raw || "Something went wrong. Please try again.";
+      if (/Invalid login credentials/i.test(raw)) msg = "Incorrect email or password.";
+      if (/Email not confirmed/i.test(raw)) {
+        msg = "Please confirm your email before signing in.";
+        setCanResendConfirm(true);
+      }
+      if (/already registered/i.test(raw)) {
+        msg = "That email is already registered. Try signing in or reset your password.";
+        setMode("signin");
+      }
+      setErrorMsg(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      setSignedInUser(null);
+    } catch {}
+  };
 
   return (
     <main className="wrap">
       <Head>
-        <title>Sign in — Parked Plastic</title>
-        <meta name="description" content="Sign in to Parked Plastic using your Google account." />
+        <title>
+          {mode === "signup" ? "Create account" : mode === "forgot" ? "Reset password" : "Sign in"} — Parked Plastic
+        </title>
+        <meta
+          name="description"
+          content="Sign in or create an account on Parked Plastic with your email and password."
+        />
         <meta name="robots" content="noindex" />
       </Head>
 
       <style jsx>{styles}</style>
 
       <div className="card" role="region" aria-labelledby="login-title">
-        <h1 id="login-title">Sign in to Parked Plastic</h1>
+        <h1 id="login-title">
+          {mode === "signup"
+            ? "Create your account"
+            : mode === "forgot"
+            ? "Reset your password"
+            : "Sign in to Parked Plastic"}
+        </h1>
+
         <p className="lead">
-          Use Google to continue. You’ll be redirected back to <code className="pill">{nextPath}</code>.
+          You’ll return to <code className="pill">{nextPath}</code> after authentication.
         </p>
 
         {/* Status */}
         <div aria-live="polite" aria-atomic="true" className="status">
           {checking && <div className="info">Checking your session…</div>}
+          {infoMsg && <div className="info">{infoMsg}</div>}
           {errorMsg && <div className="error">{errorMsg}</div>}
         </div>
 
         {signedInUser ? (
-  <>
-    <div style={{ textAlign: "center", color: "var(--char)", margin: "0 0 12px" }}>
-      You’re signed in as <strong>{signedInUser.email || "your account"}</strong>.
-    </div>
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", marginTop: 8 }}>
-      <button
-        className="btn btn-primary"
-        onClick={() => router.replace(nextPath)}
-        disabled={checking}
-      >
-        Continue to {nextPath}
-      </button>
-      <button
-        className="btn btn-outline"
-        onClick={signInDifferent}
-        disabled={submitting || checking}
-        aria-busy={submitting}
-      >
-        Use a different Google account
-      </button>
-    </div>
-  </>
-) : (
-  <>
-    <button
-      className="btn btn-primary"
-      onClick={() => signInWithGoogle(true)}  // force chooser on first-time too
-      disabled={submitting || checking}
-      aria-busy={submitting}
-    >
-      <span className="gBadge" aria-hidden>G</span>
-      {submitting ? "Redirecting…" : "Sign in with Google"}
-    </button>
-  </>
-)}
+          <>
+            <div style={{ textAlign: "center", color: "var(--char)", margin: "0 0 12px" }}>
+              You’re signed in as <strong>{signedInUser.email || "your account"}</strong>.
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                justifyContent: "center",
+                marginTop: 8,
+              }}
+            >
+              <button
+                className="btn btn-primary"
+                onClick={() => router.replace(nextPath)}
+                disabled={checking}
+              >
+                Continue to {nextPath}
+              </button>
+              <button
+                className="btn btn-outline"
+                onClick={signOut}
+                disabled={submitting || checking}
+                aria-busy={submitting}
+              >
+                Sign out
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <form onSubmit={onSubmit} className="form">
+              <label className="label" htmlFor="email">Email</label>
+              <input
+                id="email"
+                type="email"
+                className="input"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                aria-describedby="email-help"
+              />
+              <div id="email-help" className="hint">We’ll never share your email.</div>
+
+              {mode !== "forgot" && (
+                <>
+                  <label className="label" htmlFor="password">Password</label>
+                  <input
+                    id="password"
+                    type="password"
+                    className="input"
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    minLength={6}
+                  />
+                </>
+              )}
+
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={!canSubmit}
+                aria-busy={submitting}
+              >
+                {mode === "signup"
+                  ? submitting
+                    ? "Creating…"
+                    : "Create account"
+                  : mode === "forgot"
+                  ? submitting
+                    ? "Sending…"
+                    : "Send reset link"
+                  : submitting
+                  ? "Signing in…"
+                  : "Sign in"}
+              </button>
+            </form>
+
+            {/* Contextual helper: resend confirmation */}
+            {canResendConfirm && (
+              <div className="resendRow">
+                <button
+                  className="linklike"
+                  onClick={() => resendConfirmation(email)}
+                  disabled={resending}
+                >
+                  {resending ? "Resending…" : "Resend confirmation email"}
+                </button>
+              </div>
+            )}
+
+            {/* Mode Switches */}
+            <div className="switches" role="navigation" aria-label="auth options">
+              {mode !== "signin" && (
+                <button
+                  className="linklike"
+                  onClick={() => {
+                    setMode("signin"); setErrorMsg(""); setInfoMsg(""); setCanResendConfirm(false);
+                  }}
+                >
+                  Have an account? Sign in
+                </button>
+              )}
+              {mode !== "signup" && (
+                <button
+                  className="linklike"
+                  onClick={() => {
+                    setMode("signup"); setErrorMsg(""); setInfoMsg(""); setCanResendConfirm(false);
+                  }}
+                >
+                  New here? Create an account
+                </button>
+              )}
+              {mode !== "forgot" && (
+                <button
+                  className="linklike"
+                  onClick={() => {
+                    setMode("forgot"); setErrorMsg(""); setInfoMsg(""); setCanResendConfirm(false);
+                  }}
+                >
+                  Forgot your password?
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </main>
   );
@@ -151,7 +373,7 @@ const styles = `
     --tint: #ECF6F4;    /* Focus glow */
   }
 
-  .wrap { max-width: 480px; margin: 48px auto 90px; padding: 0 12px; background: var(--sea); }
+  .wrap { max-width: 520px; margin: 48px auto 90px; padding: 0 12px; background: var(--sea); }
 
   .card {
     background: #fff;
@@ -187,6 +409,23 @@ const styles = `
   .info { background: #f4fff9; border: 1px solid #d1f5e5; color: #1a6a58; }
   .error { background: #fff5f4; border: 1px solid #ffd9d5; color: #8c2f28; }
 
+  .form { display: grid; gap: 10px; margin-top: 8px; }
+
+  .label { font-weight: 600; color: var(--storm); }
+  .input {
+    width: 100%;
+    background: #fff;
+    border: 1px solid var(--cloud);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 15px;
+  }
+  .input:focus {
+    outline: none;
+    border-color: var(--teal);
+    box-shadow: 0 0 0 4px var(--tint);
+  }
+
   .btn {
     width: 100%;
     border: none; border-radius: 10px; padding: 12px 16px;
@@ -198,18 +437,30 @@ const styles = `
   .btn-primary:hover { background: var(--teal-dark); }
   .btn-primary[disabled] { opacity: .8; cursor: default; }
 
-  .gBadge {
-    background: #fff;
+  .switches {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+    text-align: center;
+  }
+  .linklike {
+    appearance: none;
+    background: transparent;
+    border: none;
+    padding: 2px 4px;
     color: var(--teal);
-    border-radius: 6px;
-    padding: 6px 8px;
-    font-weight: 800;
-    line-height: 1;
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: 600;
   }
 
-  .hint {
-    font-size: 12px; color: #555; margin-top: 12px;
+  .resendRow {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
   }
+
+  .hint { font-size: 12px; color: #555; }
 
   @media (min-width: 768px) {
     h1 { font-size: 1.8rem; }
