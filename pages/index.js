@@ -221,7 +221,7 @@ export default function Home() {
       <GlobalStyles />
 
       <main className={`${poppins.variable} ${sourceSans.variable} pp-wrap`}>
-        <h1 className="pageTitle">Parked Plastic — Disc Listings</h1>
+        <h1 className="pageTitle">Parked Plastic — Local Disc Listings</h1>
         <p className="sub">Browse used discs. Search everything, or expand filters for finer control.</p>
 
         {/* Filters */}
