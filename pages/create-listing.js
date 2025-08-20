@@ -33,7 +33,7 @@ export default function CreateListing() {
   const [description, setDescription] = useState("");
 
   // Images
-  const [files, setFiles] = useState([]);       // normalized, converted & possibly resized
+  const [files, setFiles] = useState([]); // normalized, converted & possibly resized
   const [previews, setPreviews] = useState([]); // objectURL previews
   const [uploadMsg, setUploadMsg] = useState("");
 
@@ -93,10 +93,15 @@ export default function CreateListing() {
     return img;
   }
 
-  async function resizeIfNeeded(file, maxEdge = MAX_EDGE_PX, quality = JPEG_QUALITY) {
+  async function resizeIfNeeded(
+    file,
+    maxEdge = MAX_EDGE_PX,
+    quality = JPEG_QUALITY
+  ) {
     try {
       const img = await fileToImageBitmap(file);
-      const w = img.width, h = img.height;
+      const w = img.width,
+        h = img.height;
       if (!w || !h) return file;
 
       const maxCurrent = Math.max(w, h);
@@ -111,15 +116,21 @@ export default function CreateListing() {
         const canvas = new OffscreenCanvas(outW, outH);
         const ctx = canvas.getContext("2d", { alpha: false });
         ctx.drawImage(img, 0, 0, outW, outH);
-        const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+        const blob = await canvas.convertToBlob({
+          type: "image/jpeg",
+          quality,
+        });
         const outName = (file.name || "image").replace(/\.[^.]+$/, "") + ".jpg";
         return new File([blob], outName, { type: "image/jpeg" });
       } else {
         const c = document.createElement("canvas");
-        c.width = outW; c.height = outH;
+        c.width = outW;
+        c.height = outH;
         const ctx = c.getContext("2d", { alpha: false });
         ctx.drawImage(img, 0, 0, outW, outH);
-        const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", quality));
+        const blob = await new Promise((res) =>
+          c.toBlob(res, "image/jpeg", quality)
+        );
         const outName = (file.name || "image").replace(/\.[^.]+$/, "") + ".jpg";
         return new File([blob], outName, { type: "image/jpeg" });
       }
@@ -145,7 +156,8 @@ export default function CreateListing() {
         toType: "image/jpeg",
         quality: 0.9,
       });
-      const outName = (file.name || "image").replace(/\.(heic|heif)$/i, "") + ".jpg";
+      const outName =
+        (file.name || "image").replace(/\.(heic|heif)$/i, "") + ".jpg";
       return new File([resultBlob], outName, { type: "image/jpeg" });
     } catch (err) {
       console.warn("HEIC conversion failed, using original file:", err);
@@ -162,7 +174,9 @@ export default function CreateListing() {
       if (!picked.length) return;
 
       // 1) Convert HEIC if needed
-      const converted = await Promise.all(picked.map((f) => convertHeicIfNeeded(f)));
+      const converted = await Promise.all(
+        picked.map((f) => convertHeicIfNeeded(f))
+      );
 
       // 2) Downscale if oversized (sequential for mobile friendliness)
       const resized = [];
@@ -174,12 +188,27 @@ export default function CreateListing() {
       // 3) Combine with existing selection
       let combined = [...files, ...resized];
 
+      // ⚠️ Guard: skip any zero-byte files (happens on some camera captures)
+      combined = combined.filter(
+        (f) => f && typeof f.size === "number" && f.size > 0
+      );
+      if (combined.length === 0) {
+        setErrorMsg(
+          "The captured photo looks empty. Try again or pick from your gallery."
+        );
+        return;
+      }
+
       // 4) Enforce count and size limits
       if (combined.length > MAX_FILES) {
-        setErrorMsg(`You selected ${combined.length} files. Max is ${MAX_FILES}. Extra files were ignored.`);
+        setErrorMsg(
+          `You selected ${combined.length} files. Max is ${MAX_FILES}. Extra files were ignored.`
+        );
         combined = combined.slice(0, MAX_FILES);
       }
-      const filtered = combined.filter((f) => f.size <= MAX_FILE_MB * 1024 * 1024);
+      const filtered = combined.filter(
+        (f) => f.size <= MAX_FILE_MB * 1024 * 1024
+      );
       if (filtered.length < combined.length) {
         setErrorMsg(`Some files were skipped for exceeding ${MAX_FILE_MB}MB.`);
       }
@@ -200,23 +229,76 @@ export default function CreateListing() {
   };
 
   // Drag-and-drop handlers
-  const onDragOver = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
-  const onDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
-  const onDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
+  const onDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const onDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const onDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
   const onDrop = async (e) => {
-    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
-    if (e.dataTransfer?.files?.length) await processPickedFiles(e.dataTransfer.files);
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer?.files?.length)
+      await processPickedFiles(e.dataTransfer.files);
   };
 
   async function uploadToBucket(file, userId) {
-    const ext = (file.name?.split(".").pop() || "jpg").toLowerCase();
-    const filePath = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from("listing-images")
-      .upload(filePath, file, { cacheControl: "31536000, immutable", upsert: false });
-    if (uploadError) throw uploadError;
-    const { data: pub } = supabase.storage.from("listing-images").getPublicUrl(filePath);
-    return pub?.publicUrl || null;
+    // Some camera captures come through with missing/odd MIME types.
+    // Default to jpeg if we can't tell.
+    const safeType =
+      (file &&
+        file.type &&
+        typeof file.type === "string" &&
+        file.type.trim()) ||
+      "image/jpeg";
+
+    const extGuess = (() => {
+      // Try from filename, fallback from MIME
+      const nameExt = (file.name?.split(".").pop() || "").toLowerCase();
+      if (nameExt) return nameExt;
+      if (safeType.includes("heic")) return "heic";
+      if (safeType.includes("png")) return "png";
+      return "jpg";
+    })();
+
+    const filePath = `${userId}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${extGuess}`;
+
+    // Add a safety timeout so we never “hang forever”
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 60_000); // 60s
+
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from("listing-images")
+        .upload(filePath, file, {
+          cacheControl: "31536000, immutable",
+          upsert: false,
+          contentType: safeType,
+          signal: ctrl.signal, // Abort if stuck
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: pub } = supabase.storage
+        .from("listing-images")
+        .getPublicUrl(filePath);
+
+      return pub?.publicUrl || null;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async function handleSubmit(e) {
@@ -233,14 +315,22 @@ export default function CreateListing() {
     }
 
     // ---- Flight number validation (required, ranges, .5 step) ----
-    const stepIsValid = (v) => Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
+    const stepIsValid = (v) =>
+      Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
     const numOrNaN = (s) => (s === "" ? NaN : Number(s));
-    const s = numOrNaN(speed), g = numOrNaN(glide), t = numOrNaN(turn), f = numOrNaN(fade);
+    const s = numOrNaN(speed),
+      g = numOrNaN(glide),
+      t = numOrNaN(turn),
+      f = numOrNaN(fade);
     const flightErrors = [];
-    if (!Number.isFinite(s) || s < 0 || s > 15 || !stepIsValid(s)) flightErrors.push("Speed must be 0–15 in 0.5 steps.");
-    if (!Number.isFinite(g) || g < 0 || g > 7 || !stepIsValid(g))  flightErrors.push("Glide must be 0–7 in 0.5 steps.");
-    if (!Number.isFinite(t) || t < -5 || t > 5 || !stepIsValid(t)) flightErrors.push("Turn must be -5 to 5 in 0.5 steps.");
-    if (!Number.isFinite(f) || f < 0 || f > 5 || !stepIsValid(f))  flightErrors.push("Fade must be 0–5 in 0.5 steps.");
+    if (!Number.isFinite(s) || s < 0 || s > 15 || !stepIsValid(s))
+      flightErrors.push("Speed must be 0–15 in 0.5 steps.");
+    if (!Number.isFinite(g) || g < 0 || g > 7 || !stepIsValid(g))
+      flightErrors.push("Glide must be 0–7 in 0.5 steps.");
+    if (!Number.isFinite(t) || t < -5 || t > 5 || !stepIsValid(t))
+      flightErrors.push("Turn must be -5 to 5 in 0.5 steps.");
+    if (!Number.isFinite(f) || f < 0 || f > 5 || !stepIsValid(f))
+      flightErrors.push("Fade must be 0–5 in 0.5 steps.");
     if (flightErrors.length) {
       setErrorMsg(flightErrors[0]);
       return;
@@ -294,7 +384,10 @@ export default function CreateListing() {
     }
   }
 
-  const canSubmit = useMemo(() => title.trim().length > 0 && !loading, [title, loading]);
+  const canSubmit = useMemo(
+    () => title.trim().length > 0 && !loading,
+    [title, loading]
+  );
   // (We also gate in onSubmit; canSubmit keeps the button UX snappy)
 
   // ---------- UI ----------
@@ -307,9 +400,19 @@ export default function CreateListing() {
         </Head>
         <p className="center muted">Checking session…</p>
         <style jsx>{`
-          .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
-          .center { text-align: center; margin-top: 40px; }
-          .muted { color: #3A3A3A; opacity: .85; }
+          .wrap {
+            max-width: 960px;
+            margin: 32px auto;
+            padding: 0 16px;
+          }
+          .center {
+            text-align: center;
+            margin-top: 40px;
+          }
+          .muted {
+            color: #3a3a3a;
+            opacity: 0.85;
+          }
         `}</style>
       </main>
     );
@@ -320,7 +423,10 @@ export default function CreateListing() {
       <main className="wrap">
         <Head>
           <title>Post a Disc — Parked Plastic</title>
-          <meta name="description" content="Sign in to post a disc listing on Parked Plastic." />
+          <meta
+            name="description"
+            content="Sign in to post a disc listing on Parked Plastic."
+          />
         </Head>
         <style jsx>{styles}</style>
         <div className="panel">
@@ -328,7 +434,11 @@ export default function CreateListing() {
           <p className="muted">You need to sign in to create a listing.</p>
           <button
             className="btn btn-primary"
-            onClick={() => router.push(`/login?redirect=${encodeURIComponent("/create-listing")}`)}
+            onClick={() =>
+              router.push(
+                `/login?redirect=${encodeURIComponent("/create-listing")}`
+              )
+            }
           >
             Sign in with Google
           </button>
@@ -365,7 +475,6 @@ export default function CreateListing() {
         <form onSubmit={handleSubmit}>
           {/* Mobile-first grid; becomes 2-col ≥768px */}
           <div className="grid2">
-
             {/* Images — with drag & drop (TOP) */}
             <div className="field span2">
               <label htmlFor="images">Images</label>
@@ -389,7 +498,7 @@ export default function CreateListing() {
                 <input
                   ref={cameraInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.heic,.heif"
                   capture="environment"
                   onChange={handleFileChange}
                   style={{ display: "none" }}
@@ -409,8 +518,9 @@ export default function CreateListing() {
                 </div>
 
                 <p className="uploaderHint">
-                  Drag & drop here too • Up to {MAX_FILES} photos • Each ≤ {MAX_FILE_MB}MB • 4:3 ratio
-                  looks best • HEIC auto‑converted • Large images auto‑downsized
+                  Drag & drop here too • Up to {MAX_FILES} photos • Each ≤{" "}
+                  {MAX_FILE_MB}MB • 4:3 ratio looks best • HEIC auto‑converted •
+                  Large images auto‑downsized
                 </p>
               </div>
 
@@ -424,7 +534,8 @@ export default function CreateListing() {
                     ))}
                   </div>
                   <p className="hintRow">
-                    Tip: Use good light and a clean background. Slight angle helps show dome.
+                    Tip: Use good light and a clean background. Slight angle
+                    helps show dome.
                   </p>
                 </>
               )}
@@ -476,33 +587,63 @@ export default function CreateListing() {
                 <div className="flightField">
                   <span className="ffLabel">Speed</span>
                   <input
-                    type="number" step="0.5" min={0} max={15} required
-                    value={speed} onChange={(e)=>setSpeed(e.target.value)} inputMode="decimal" placeholder="e.g., 12"
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    max={15}
+                    required
+                    value={speed}
+                    onChange={(e) => setSpeed(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="e.g., 12"
                   />
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Glide</span>
                   <input
-                    type="number" step="0.5" min={0} max={7} required
-                    value={glide} onChange={(e)=>setGlide(e.target.value)} inputMode="decimal" placeholder="e.g., 5"
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    max={7}
+                    required
+                    value={glide}
+                    onChange={(e) => setGlide(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="e.g., 5"
                   />
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Turn</span>
                   <input
-                    type="number" step="0.5" min={-5} max={5} required
-                    value={turn} onChange={(e)=>setTurn(e.target.value)} inputMode="decimal" placeholder="e.g., -1"
+                    type="number"
+                    step="0.5"
+                    min={-5}
+                    max={5}
+                    required
+                    value={turn}
+                    onChange={(e) => setTurn(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="e.g., -1"
                   />
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Fade</span>
                   <input
-                    type="number" step="0.5" min={0} max={5} required
-                    value={fade} onChange={(e)=>setFade(e.target.value)} inputMode="decimal" placeholder="e.g., 3"
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    max={5}
+                    required
+                    value={fade}
+                    onChange={(e) => setFade(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="e.g., 3"
                   />
                 </div>
               </div>
-              <p className="hintRow">Use 0.5 increments. Example format: 12 / 5 / -1 / 3</p>
+              <p className="hintRow">
+                Use 0.5 increments. Example format: 12 / 5 / -1 / 3
+              </p>
             </div>
 
             {/* Plastic | Condition */}
@@ -581,7 +722,11 @@ export default function CreateListing() {
               >
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={!canSubmit}
+              >
                 {loading ? "Posting…" : "Create Listing"}
               </button>
             </div>
