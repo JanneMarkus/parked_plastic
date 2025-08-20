@@ -462,7 +462,7 @@ export default function CreateListing() {
 
       <div className="titleRow">
         <h1>Post a Disc</h1>
-        <p className="subtle">Fields marked “optional” can be left blank</p>
+        <p className="subtle">Detailed listings sell best</p>
       </div>
 
       {/* Errors / status */}
@@ -563,6 +563,7 @@ export default function CreateListing() {
                 id="brand"
                 type="text"
                 value={brand}
+                required
                 onChange={(e) => setBrand(e.target.value)}
                 placeholder="Innova, Discraft, MVP…"
                 autoComplete="off"
@@ -574,6 +575,7 @@ export default function CreateListing() {
                 id="mold"
                 type="text"
                 value={mold}
+                required
                 onChange={(e) => setMold(e.target.value)}
                 placeholder="Destroyer, Buzzz, Hex…"
                 autoComplete="off"
@@ -673,7 +675,7 @@ export default function CreateListing() {
             {/* Weight | Price */}
             <div className="field">
               <label htmlFor="weight">
-                Weight (g) <span className="hint">(optional)</span>
+                Weight (g)
               </label>
               <input
                 id="weight"
