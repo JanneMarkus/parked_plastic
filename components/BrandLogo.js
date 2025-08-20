@@ -1,8 +1,9 @@
 // components/BrandLogo.js
-// Header-friendly Parked Plastic logo with equal-sized disc stack.
+// Header-friendly Parked Plastic logo that uses your PNG disc stack asset.
 // Props:
 //   variant: "header" | "boxed" (default: "header")
-//     - "header": discs + wordmark (transparent background), sized for a 64px header
+//     - "header": uses /public/pp-triple-stack-icon.png next to the wordmark (transparent background),
+//                 sized for a 64px header
 //     - "boxed": reproduces your Storm Blue card with faint basket silhouette (for hero/splash)
 //   ariaLabel: accessible label for screen readers
 
@@ -104,14 +105,20 @@ export default function BrandLogo({ variant = "header", ariaLabel = "Parked Plas
   }
 
   // Default "header" variant: compact for a 64px-tall nav bar, transparent background.
+  // Uses the PNG icon placed in /public/pp-triple-stack-icon.png next to the wordmark.
   return (
     <div className="pp-logo" aria-label={ariaLabel}>
-      <div className="stacked-discs" aria-hidden="true">
-        <div className="disc disc-bottom" />
-        <div className="disc disc-middle" />
-        <div className="disc disc-top" />
-      </div>
-      <div className="logo-text">
+      {/* Disc stack image from /public */}
+      <img
+        src="/pp-triple-stack-icon-boxed-2.png"
+        alt=""               /* decorative; text follows */
+        width={36}
+        height={36}
+        className="brandMark"
+      />
+
+      {/* Wordmark text */}
+      <div className="logo-text" aria-hidden="false">
         <span className="line1">PARKED</span>
         <span className="line2">PLASTIC</span>
       </div>
@@ -125,36 +132,10 @@ export default function BrandLogo({ variant = "header", ariaLabel = "Parked Plas
           user-select: none;
           color: #fff; /* header is Storm Blue, so white text */
         }
-        /* Compact, proportional version of your equal-sized stack */
-        .stacked-discs {
-          position: relative;
-          width: 46px;
-          height: 30px;
-        }
-        .disc {
-          position: absolute;
-          width: 46px;
-          height: 12px;
-          border-radius: 50% / 50%;
-          border: 1.5px solid rgba(255,255,255,0.7);
-          box-shadow: 0 2px 6px rgba(0,0,0,0.28);
-          left: 50%;
-          transform: translateX(-50%); /* equal-sized discs */
-        }
-        .disc-top {
-          top: 0;
-          background: #279989;   /* Caribbean Sea */
-          z-index: 5;
-        }
-        .disc-middle {
-          top: 6.5px;            /* proportional overlap to your 13px */
-          background: #ECF6F4;   /* Light Teal Tint */
-          z-index: 4;
-        }
-        .disc-bottom {
-          top: 13px;             /* proportional overlap to your 26px */
-          background: #D6D2C4;   /* Wave Crest */
-          z-index: 3;
+        .brandMark {
+          width: 36px;
+          height: 36px;
+          display: block;
         }
 
         .logo-text {
@@ -167,6 +148,11 @@ export default function BrandLogo({ variant = "header", ariaLabel = "Parked Plas
         }
         .line1 { font-size: 16px; }
         .line2 { font-size: 12px; margin-top: 2px; letter-spacing: 0.08em; }
+
+        /* Optional: hide text on very small screens so only the icon shows
+        @media (max-width: 480px) {
+          .logo-text { display: none; }
+        } */
       `}</style>
     </div>
   );
