@@ -1,5 +1,5 @@
 // pages/create-listing.js
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { supabase } from "@/lib/supabaseClient";
@@ -43,6 +43,9 @@ export default function CreateListing() {
 
   // Drag & drop state
   const [isDragging, setIsDragging] = useState(false);
+
+  // Camera input ref (for Option 2)
+  const cameraInputRef = useRef(null);
 
   // ---------- Auth ----------
   useEffect(() => {
@@ -334,6 +337,8 @@ export default function CreateListing() {
     );
   }
 
+  const openCamera = () => cameraInputRef.current?.click();
+
   return (
     <main className="wrap">
       <Head>
@@ -361,7 +366,7 @@ export default function CreateListing() {
           {/* Mobile-first grid; becomes 2-col ≥768px */}
           <div className="grid2">
 
-            {/* Images — with drag & drop */}
+            {/* Images — with drag & drop (TOP) */}
             <div className="field span2">
               <label htmlFor="images">Images</label>
               <div
@@ -371,16 +376,40 @@ export default function CreateListing() {
                 onDragLeave={onDragLeave}
                 onDrop={onDrop}
               >
+                {/* Hidden gallery picker */}
                 <input
                   id="images"
                   type="file"
                   accept="image/*,.heic,.heif"
-                  capture="environment"
                   multiple
                   onChange={handleFileChange}
+                  style={{ display: "none" }}
                 />
+                {/* Hidden camera capture (Option 2) */}
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  style={{ display: "none" }}
+                />
+
+                <div className="uploaderCtas">
+                  <label htmlFor="images" className="btn btn-ghost">
+                    Choose from gallery
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={openCamera}
+                  >
+                    Take Photo
+                  </button>
+                </div>
+
                 <p className="uploaderHint">
-                  Drag & drop or click to upload • Up to {MAX_FILES} photos • Each ≤ {MAX_FILE_MB}MB • 4:3 ratio
+                  Drag & drop here too • Up to {MAX_FILES} photos • Each ≤ {MAX_FILE_MB}MB • 4:3 ratio
                   looks best • HEIC auto‑converted • Large images auto‑downsized
                 </p>
               </div>
@@ -542,7 +571,6 @@ export default function CreateListing() {
               />
             </div>
 
-
             {/* Actions */}
             <div className="actions span2">
               <button
@@ -652,13 +680,25 @@ const styles = `
     padding: 14px;
     background: #fff;
     transition: border-color .15s, box-shadow .15s, background .15s;
+    text-align: center;
   }
   .uploader.dragging {
     border-color: var(--teal);
     box-shadow: 0 0 0 4px var(--tint);
     background: #fff;
   }
-  .uploaderHint { font-size: .85rem; color: #666; margin: 6px 0 0; }
+  .uploaderHint { font-size: .85rem; color: #666; margin: 10px 0 0; }
+
+  .uploaderCtas {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 480px) {
+    .uploaderCtas { flex-direction: column; align-items: stretch; }
+    .uploaderCtas .btn { width: 100%; }
+  }
 
   .previews {
     display: grid;
@@ -706,7 +746,10 @@ const styles = `
   }
   .btn-primary { background: var(--teal); color: #fff; }
   .btn-primary:hover { background: var(--teal-dark); }
-  .btn-ghost { background: #fff; color: var(--storm); border: 2px solid var(--storm); }
+  .btn-ghost {
+    background: #fff; color: var(--storm); border: 2px solid var(--storm);
+    text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+  }
   .btn-ghost:hover { background: var(--storm); color: #fff; }
 
   /* Desktop tweaks */
