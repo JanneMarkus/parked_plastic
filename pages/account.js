@@ -9,11 +9,18 @@ import ContactInfoCard from "@/components/ContactInfoCard";
 
 /* ------------------------- Small helpers/components ------------------------ */
 
-const CAD = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
+const CAD = new Intl.NumberFormat("en-CA", {
+  style: "currency",
+  currency: "CAD",
+});
 
 function StatusTabs({ value, counts, onChange }) {
   return (
-    <div className="pp-tabs" role="tablist" aria-label="Filter listings by status">
+    <div
+      className="pp-tabs"
+      role="tablist"
+      aria-label="Filter listings by status"
+    >
       {[
         { key: "all", label: "All", count: counts.all },
         { key: "active", label: "Active", count: counts.active },
@@ -39,9 +46,9 @@ function StatusTabs({ value, counts, onChange }) {
           flex-wrap: wrap;
         }
         .pp-tab {
-          border: 2px solid var(--storm, #141B4D);
+          border: 2px solid var(--storm, #141b4d);
           background: #fff;
-          color: var(--storm, #141B4D);
+          color: var(--storm, #141b4d);
           border-radius: 8px;
           padding: 8px 12px;
           font-weight: 700;
@@ -52,10 +59,10 @@ function StatusTabs({ value, counts, onChange }) {
         }
         .pp-tab:focus {
           outline: none;
-          box-shadow: 0 0 0 4px var(--tint, #ECF6F4);
+          box-shadow: 0 0 0 4px var(--tint, #ecf6f4);
         }
         .pp-tab.is-active {
-          background: var(--storm, #141B4D);
+          background: var(--storm, #141b4d);
           color: #fff;
         }
         .chip {
@@ -66,8 +73,8 @@ function StatusTabs({ value, counts, onChange }) {
           height: 22px;
           padding: 0 6px;
           border-radius: 999px;
-          background: var(--cloud, #E9E9E9);
-          color: var(--storm, #141B4D);
+          background: var(--cloud, #e9e9e9);
+          color: var(--storm, #141b4d);
           font-weight: 700;
           font-size: 0.85rem;
         }
@@ -87,7 +94,10 @@ function ListingCard({ l, onToggleSold, onDelete }) {
       : null;
 
   return (
-    <article className={`pp-card ${l.is_sold ? "is-sold" : ""}`} role="listitem">
+    <article
+      className={`pp-card ${l.is_sold ? "is-sold" : ""}`}
+      role="listitem"
+    >
       <div className="img-wrap">
         {l.image_urls?.length ? (
           <Image
@@ -108,17 +118,25 @@ function ListingCard({ l, onToggleSold, onDelete }) {
       <div className="content">
         <h3 className="title">{l.title}</h3>
         <div className="meta">
-          {(l.brand || "—")}
+          {l.brand || "—"}
           {l.mold ? ` • ${l.mold}` : ""}
           {l.weight ? ` • ${l.weight} g` : ""}
         </div>
         {price && <div className="price">{price}</div>}
 
         <div className="row">
-          <Link href={`/listings/${l.id}`} className="btn btn-outline" aria-label={`View ${l.title}`}>
+          <Link
+            href={`/listings/${l.id}`}
+            className="btn btn-outline"
+            aria-label={`View ${l.title}`}
+          >
             View
           </Link>
-          <Link href={`/listings/${l.id}/edit`} className="btn btn-outline" aria-label={`Edit ${l.title}`}>
+          <Link
+            href={`/listings/${l.id}/edit`}
+            className="btn btn-outline"
+            aria-label={`Edit ${l.title}`}
+          >
             Edit
           </Link>
           <button
@@ -138,7 +156,7 @@ function ListingCard({ l, onToggleSold, onDelete }) {
         .pp-card {
           position: relative;
           background: #fff;
-          border: 1px solid var(--cloud, #E9E9E9);
+          border: 1px solid var(--cloud, #e9e9e9);
           border-radius: 12px;
           box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
           overflow: hidden;
@@ -150,7 +168,7 @@ function ListingCard({ l, onToggleSold, onDelete }) {
           width: 100%;
           aspect-ratio: 4 / 3;
           overflow: hidden;
-          background: var(--cloud, #E9E9E9);
+          background: var(--cloud, #e9e9e9);
         }
         .pp-card.is-sold .img {
           filter: grayscale(1) brightness(0.82) contrast(1.1);
@@ -189,17 +207,17 @@ function ListingCard({ l, onToggleSold, onDelete }) {
         .title {
           font-family: "Poppins", sans-serif;
           font-weight: 600;
-          color: var(--storm, #141B4D);
+          color: var(--storm, #141b4d);
           margin: 0;
           font-size: 1.05rem;
         }
         .meta {
           font-size: 0.9rem;
-          color: var(--char, #3A3A3A);
+          color: var(--char, #3a3a3a);
         }
         .price {
           font-weight: 700;
-          color: var(--storm, #141B4D);
+          color: var(--storm, #141b4d);
         }
         .row {
           display: flex;
@@ -234,7 +252,8 @@ export default function Account() {
       const u = data?.session?.user ?? null;
       setUser(u);
       setReady(true);
-      if (!u) router.replace(`/login?redirect=${encodeURIComponent("/account")}`);
+      if (!u)
+        router.replace(`/login?redirect=${encodeURIComponent("/account")}`);
     })();
 
     const {
@@ -296,8 +315,13 @@ export default function Account() {
   async function toggleSold(id, current) {
     setErrorMsg("");
     const prev = listings;
-    setListings((p) => p.map((l) => (l.id === id ? { ...l, is_sold: !current } : l)));
-    const { error } = await supabase.from("discs").update({ is_sold: !current }).eq("id", id);
+    setListings((p) =>
+      p.map((l) => (l.id === id ? { ...l, is_sold: !current } : l))
+    );
+    const { error } = await supabase
+      .from("discs")
+      .update({ is_sold: !current })
+      .eq("id", id);
     if (error) {
       alert("Failed to update: " + error.message);
       setListings(prev); // revert
@@ -305,7 +329,8 @@ export default function Account() {
   }
 
   async function deleteListing(id) {
-    if (!confirm("Delete this listing permanently? This cannot be undone.")) return;
+    if (!confirm("Delete this listing permanently? This cannot be undone."))
+      return;
     setErrorMsg("");
     const prev = listings;
     setListings((p) => p.filter((l) => l.id !== id));
@@ -331,7 +356,7 @@ export default function Account() {
             margin-top: 40px;
           }
           .muted {
-            color: var(--char, #3A3A3A);
+            color: var(--char, #3a3a3a);
             opacity: 0.85;
           }
         `}</style>
@@ -344,7 +369,10 @@ export default function Account() {
     <>
       <Head>
         <title>My Listings — Parked Plastic</title>
-        <meta name="description" content="Manage your disc listings: edit, mark sold, or delete." />
+        <meta
+          name="description"
+          content="Manage your disc listings: edit, mark sold, or delete."
+        />
       </Head>
 
       <main className="pp-wrap">
@@ -391,7 +419,12 @@ export default function Account() {
         ) : (
           <div className="grid" role="list">
             {listings.map((l) => (
-              <ListingCard key={l.id} l={l} onToggleSold={toggleSold} onDelete={deleteListing} />
+              <ListingCard
+                key={l.id}
+                l={l}
+                onToggleSold={toggleSold}
+                onDelete={deleteListing}
+              />
             ))}
           </div>
         )}
@@ -441,9 +474,9 @@ export default function Account() {
         }
         .empty {
           text-align: center;
-          color: var(--char, #3A3A3A);
+          color: var(--char, #3a3a3a);
           padding: 24px;
-          border: 1px dashed var(--cloud, #E9E9E9);
+          border: 1px dashed var(--cloud, #e9e9e9);
           border-radius: 12px;
           background: #fdfdfb;
         }
