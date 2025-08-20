@@ -558,7 +558,7 @@ export default function CreateListing() {
 
             {/* Brand | Mold */}
             <div className="field">
-              <label htmlFor="brand">Brand</label>
+              <label htmlFor="brand">Brand*</label>
               <input
                 id="brand"
                 type="text"
@@ -570,7 +570,7 @@ export default function CreateListing() {
               />
             </div>
             <div className="field">
-              <label htmlFor="mold">Mold</label>
+              <label htmlFor="mold">Mold*</label>
               <input
                 id="mold"
                 type="text"
