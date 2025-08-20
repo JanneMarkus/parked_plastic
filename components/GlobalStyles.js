@@ -115,6 +115,8 @@ export default function GlobalStyles() {
       /* badges */
       .pp-badge { display: inline-block; border-radius: 6px; padding: 4px 8px; font-weight: 700; font-size: .8rem; }
       .pp-badge--coral { background: var(--coral); color: #fff; }
+      .pp-badge--storm { background: var(--storm); color: #fff; }
+      .pp-badge--teal { background: var(--teal); color: #fff; }
 
       /* a11y helper */
       .sr-only {

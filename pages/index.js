@@ -507,7 +507,7 @@ export default function Home() {
                     <span>{d.weight != null ? `${d.weight} g` : "N/A"}</span>
                     {d.condition && <span>{d.condition}</span>}
                   </div>
-                  {price && <div className="price pp-badge pp-badge--coral">{price}</div>}
+                  {price && <div className="price pp-badge pp-badge--teal">{price}</div>}
                 </div>
               </Link>
             );
