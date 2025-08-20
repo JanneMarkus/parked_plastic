@@ -379,6 +379,29 @@ export default function EditListing() {
       <div className="card">
         <form onSubmit={onSave}>
           <div className="grid2">
+            {/* Replace images (optional) */}
+            <div className="field span2">
+              <label htmlFor="images">Replace Images (optional)</label>
+              <div
+                className={`uploader ${isDragging ? "dragging" : ""}`}
+                onDragEnter={onDragEnter}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+              >
+                <input
+                  id="images"
+                  type="file"
+                  accept="image/*,.heic,.heif"
+                  capture="environment"
+                  multiple
+                  onChange={handleFileChange}
+                />
+                <p className="uploaderHint">
+                  Drag & drop or click to upload • Up to {MAX_FILES} photos • Each ≤ {MAX_FILE_MB}MB • 4:3 ratio looks best •
+                  HEIC auto‑converted • Large images auto‑downsized
+                </p>
+              </div>
             
             {/* Title */}
             <div className="field span2">
@@ -532,28 +555,6 @@ export default function EditListing() {
               />
             </div>
 
-            {/* Replace images (optional) */}
-            <div className="field span2">
-              <label htmlFor="images">Replace Images (optional)</label>
-              <div
-                className={`uploader ${isDragging ? "dragging" : ""}`}
-                onDragEnter={onDragEnter}
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={onDrop}
-              >
-                <input
-                  id="images"
-                  type="file"
-                  accept="image/*,.heic,.heif"
-                  multiple
-                  onChange={handleFileChange}
-                />
-                <p className="uploaderHint">
-                  Drag & drop or click to upload • Up to {MAX_FILES} photos • Each ≤ {MAX_FILE_MB}MB • 4:3 ratio looks best •
-                  HEIC auto‑converted • Large images auto‑downsized
-                </p>
-              </div>
 
               {previews.length > 0 && (
                 <>
