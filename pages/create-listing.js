@@ -361,6 +361,45 @@ export default function CreateListing() {
           {/* Mobile-first grid; becomes 2-col ≥768px */}
           <div className="grid2">
 
+            {/* Images — with drag & drop */}
+            <div className="field span2">
+              <label htmlFor="images">Images</label>
+              <div
+                className={`uploader ${isDragging ? "dragging" : ""}`}
+                onDragEnter={onDragEnter}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+              >
+                <input
+                  id="images"
+                  type="file"
+                  accept="image/*,.heic,.heif"
+                  capture="environment"
+                  multiple
+                  onChange={handleFileChange}
+                />
+                <p className="uploaderHint">
+                  Drag & drop or click to upload • Up to {MAX_FILES} photos • Each ≤ {MAX_FILE_MB}MB • 4:3 ratio
+                  looks best • HEIC auto‑converted • Large images auto‑downsized
+                </p>
+              </div>
+
+              {previews.length > 0 && (
+                <>
+                  <div className="previews">
+                    {previews.map((src) => (
+                      <div className="thumb" key={src}>
+                        <img src={src} alt="Selected preview" />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="hintRow">
+                    Tip: Use good light and a clean background. Slight angle helps show dome.
+                  </p>
+                </>
+              )}
+            </div>
 
             {/* Title */}
             <div className="field span2">
@@ -503,44 +542,6 @@ export default function CreateListing() {
               />
             </div>
 
-            {/* Images — with drag & drop */}
-            <div className="field span2">
-              <label htmlFor="images">Images</label>
-              <div
-                className={`uploader ${isDragging ? "dragging" : ""}`}
-                onDragEnter={onDragEnter}
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={onDrop}
-              >
-                <input
-                  id="images"
-                  type="file"
-                  accept="image/*,.heic,.heif"
-                  multiple
-                  onChange={handleFileChange}
-                />
-                <p className="uploaderHint">
-                  Drag & drop or click to upload • Up to {MAX_FILES} photos • Each ≤ {MAX_FILE_MB}MB • 4:3 ratio
-                  looks best • HEIC auto‑converted • Large images auto‑downsized
-                </p>
-              </div>
-
-              {previews.length > 0 && (
-                <>
-                  <div className="previews">
-                    {previews.map((src) => (
-                      <div className="thumb" key={src}>
-                        <img src={src} alt="Selected preview" />
-                      </div>
-                    ))}
-                  </div>
-                  <p className="hintRow">
-                    Tip: Use good light and a clean background. Slight angle helps show dome.
-                  </p>
-                </>
-              )}
-            </div>
 
             {/* Actions */}
             <div className="actions span2">
