@@ -256,8 +256,8 @@ export default function EditListing() {
     const flightErrors = [];
     if (!Number.isFinite(s) || s < 0 || s > 15 || !stepIsValid(s)) flightErrors.push("Speed must be 0–15 in 0.5 steps.");
     if (!Number.isFinite(g) || g < 0 || g > 7 || !stepIsValid(g))  flightErrors.push("Glide must be 0–7 in 0.5 steps.");
-    if (!Number.isFinite(t) || t < -5 || t > 5 || !stepIsValid(t)) flightErrors.push("Turn must be -5 to 5 in 0.5 steps.");
-    if (!Number.isFinite(f) || f < 0 || f > 5 || !stepIsValid(f))  flightErrors.push("Fade must be 0–5 in 0.5 steps.");
+    if (!Number.isFinite(t) || t < -5 || t > 1 || !stepIsValid(t)) flightErrors.push("Turn must be -5 to 1 in 0.5 steps.");
+    if (!Number.isFinite(f) || f < 0 || f > 6 || !stepIsValid(f))  flightErrors.push("Fade must be 0–6 in 0.5 steps.");
     if (flightErrors.length) {
       setErrorMsg(flightErrors[0]);
       return;
