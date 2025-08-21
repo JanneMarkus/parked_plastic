@@ -275,7 +275,7 @@ export default function ListingDetail() {
               </div>
             )}
             <div className="spec"><label>Weight</label><div>{disc.weight != null ? `${disc.weight} g` : "N/A"}</div></div>
-            <div className="spec"><label>Condition</label><div>{disc.condition || "—"}</div></div>
+            <div className="spec"><label>Condition (<a href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">Sleepy Scale</a>)</label><div>{disc.condition || "—"}</div></div>
             <div className="spec"><label>Glow Disc?</label><div>{disc.is_glow ==true ? "Yes" : disc.is_glow ==false ? "No" : "Not Specified"}</div></div>
             <div className="spec"><label>Inked?</label><div>{disc.is_inked ==true ? "Yes" : disc.is_inked ==false ? "No" : "Not Specified"}</div></div>
           </div>

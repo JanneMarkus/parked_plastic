@@ -27,7 +27,7 @@ export default function CreateListing() {
   const [brand, setBrand] = useState("");
   const [mold, setMold] = useState("");
   const [plastic, setPlastic] = useState("");
-  const [condition, setCondition] = useState("");
+  const [conditionScore, setConditionScore] = useState(""); // 1–10 (Sleepy Scale)
   const [weight, setWeight] = useState(""); // optional -> NULL if blank
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
@@ -384,13 +384,23 @@ function sanitizeTurn() {
       const weightNum = weight.trim() === "" ? null : Number(weight);
       const priceNum = price.trim() === "" ? null : Number(price);
 
+      // Sleepy Scale condition (optional)
+  const condNumRaw = conditionScore.trim() === "" ? null : Number(conditionScore);
+  if (condNumRaw !== null) {
+    if (!Number.isFinite(condNumRaw)) {
+      setErrorMsg("Condition must be a number 1–10.");
+      return;
+    }
+  }
+  const condNum = condNumRaw === null ? null : Math.max(1, Math.min(10, Math.round(condNumRaw)));
+
       const { error } = await supabase.from("discs").insert([
         {
           title: title.trim(),
           brand: brand.trim() || null,
           mold: mold.trim() || null,
           plastic: plastic.trim() || null,
-          condition: condition.trim() || null,
+          condition: condNum, // integer 1–10 (nullable)
           weight: Number.isFinite(weightNum) ? weightNum : null,
           price: Number.isFinite(priceNum) ? priceNum : null,
           description: description.trim() || null,
@@ -720,16 +730,31 @@ function sanitizeTurn() {
               />
             </div>
             <div className="field">
-              <label htmlFor="condition">Condition</label>
-              <input
-                id="condition"
-                type="text"
-                value={condition}
-                onChange={(e) => setCondition(e.target.value)}
-                placeholder="Like New, Excellent, Good…"
-                autoComplete="off"
-              />
-            </div>
+  <label htmlFor="condition">Condition*</label>
+  <input
+    id="condition"
+    type="number"
+    min={1}
+    max={10}
+    step={1}
+    inputMode="numeric"
+    placeholder="e.g., 8"
+    required
+    value={conditionScore}
+    onChange={(e) => setConditionScore(e.target.value)}
+    onBlur={() => {
+      setConditionScore((prev) => {
+        if (prev === "") return prev;
+        const n = Number(prev);
+        if (!Number.isFinite(n)) return "";
+        // snap to an integer in [1,10]
+        return String(Math.max(1, Math.min(10, Math.round(n))));
+      });
+    }}
+  />
+  <p className="hintRow">Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new</p>
+  <p className="hintRow"><a href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">Learn more about Sleepy Scale here</a></p>
+</div>
 
             {/* Weight | Price */}
             <div className="field">

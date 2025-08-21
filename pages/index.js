@@ -41,7 +41,8 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("");
   const [mold, setMold] = useState("");
-  const [condition, setCondition] = useState("");
+  const [minCondition, setMinCondition] = useState("");
+  const [maxCondition, setMaxCondition] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [minWeight, setMinWeight] = useState("");
@@ -96,7 +97,11 @@ export default function Home() {
 
         if (brand.trim()) query = query.ilike("brand", brand.trim());
         if (mold.trim()) query = query.ilike("mold", mold.trim());
-        if (condition) query = query.eq("condition", condition);
+        
+        const minC = minCondition !== "" ? Number(minCondition) : null;
+        const maxC = maxCondition !== "" ? Number(maxCondition) : null;
+        if (minC !== null && !Number.isNaN(minC)) query = query.gte("condition", minC);
+        if (maxC !== null && !Number.isNaN(maxC)) query = query.lte("condition", maxC);
 
         const minP = minPrice !== "" ? Number(minPrice) : null;
         const maxP = maxPrice !== "" ? Number(maxPrice) : null;
@@ -139,7 +144,8 @@ export default function Home() {
     };
   }, [
     debouncedSearch,
-    brand, mold, condition,
+    brand, mold,
+    minCondition, maxCondition,
     minPrice, maxPrice, minWeight, maxWeight,
     speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax,
     includeSold, onlyGlow, excludeInked
@@ -167,7 +173,8 @@ export default function Home() {
     const basics = [
       brand.trim(),
       mold.trim(),
-      condition,
+      minCondition !== "" ? "cMin" : "",
+      maxCondition !== "" ? "cMax" : "",
       minPrice !== "" ? "minPrice" : "",
       maxPrice !== "" ? "maxPrice" : "",
       minWeight !== "" ? "minWeight" : "",
@@ -189,7 +196,7 @@ export default function Home() {
     ];
     return [...basics, ...flight].filter(Boolean).length;
   }, [
-    brand, mold, condition,
+    brand, mold, minCondition, maxCondition,
     minPrice, maxPrice, minWeight, maxWeight,
     speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax,
     debouncedSearch, includeSold
@@ -199,7 +206,8 @@ export default function Home() {
     setSearch("");
     setBrand("");
     setMold("");
-    setCondition("");
+    setMinCondition("");
+    setMaxCondition("");
     setMinPrice("");
     setMaxPrice("");
     setMinWeight("");
@@ -303,22 +311,27 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="pp-field">
-                  <label htmlFor="condition">Condition</label>
-                  <select
-                    id="condition"
-                    className="pp-select"
-                    value={condition}
-                    onChange={(e) => setCondition(e.target.value)}
-                  >
-                    <option value="">Any</option>
-                    {CONDITION_OPTIONS.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <div className="pp-field flight">
+   <label>Condition (Sleepy Scale)</label>
+   <div className="row">
+     <input
+       className="pp-input"
+       type="number" min={1} max={10} step={1} placeholder="Min"
+       value={minCondition}
+       onChange={(e)=>setMinCondition(e.target.value)}
+       onBlur={()=>setMinCondition((v)=> v==="" ? v : String(Math.max(1, Math.min(10, Math.round(Number(v)||0)))))}
+       inputMode="numeric"
+     />
+     <input
+       className="pp-input"
+       type="number" min={1} max={10} step={1} placeholder="Max"
+       value={maxCondition}
+       onChange={(e)=>setMaxCondition(e.target.value)}
+       onBlur={()=>setMaxCondition((v)=> v==="" ? v : String(Math.max(1, Math.min(10, Math.round(Number(v)||0)))))}
+       inputMode="numeric"
+     />
+   </div>
+ </div>
 
                 <div className="pp-field">
                   <label htmlFor="minWeight">Min Weight (g)</label>
@@ -531,7 +544,7 @@ export default function Home() {
                   <div className="specs">
                     {d.weight && <span>{d.weight} g</span>}
                     {d.is_glow && <span>Glow</span>}
-                    {d.condition && <span>{d.condition}</span>}
+                    {d.condition != null && <span>{d.condition}/10</span>}
                     {d.is_inked && <span>Inked</span>}
                   </div>
                   {price && <div className="price pp-badge pp-badge--teal">{price}</div>}

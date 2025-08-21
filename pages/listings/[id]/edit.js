@@ -24,7 +24,7 @@ export default function EditListing() {
   const [brand, setBrand] = useState("");
   const [mold, setMold] = useState("");
   const [plastic, setPlastic] = useState("");
-  const [condition, setCondition] = useState("");
+  const [conditionScore, setConditionScore] = useState(""); // 1–10
   const [weight, setWeight] = useState("");
   const [price, setPrice] = useState("");
   const [city, setCity] = useState("Thunder Bay");
@@ -96,7 +96,7 @@ export default function EditListing() {
       setBrand(d.brand || "");
       setMold(d.mold || "");
       setPlastic(d.plastic || "");
-      setCondition(d.condition || "");
+      setConditionScore(d.condition ?? "");
       setWeight(d.weight ?? "");
       setPrice(d.price ?? "");
       setCity(d.city || "Thunder Bay");
@@ -370,6 +370,14 @@ export default function EditListing() {
       return;
     }
 
+    // Sleepy Scale condition (optional)
+  const condRaw = conditionScore === "" ? null : Number(conditionScore);
+  if (condRaw !== null && !Number.isFinite(condRaw)) {
+    setErrorMsg("Condition must be a number 1–10.");
+    return;
+  }
+  const condNum = condRaw === null ? null : Math.max(1, Math.min(10, Math.round(condRaw)));
+
     setSaving(true);
     try {
       let image_urls = existingImages;
@@ -390,7 +398,7 @@ export default function EditListing() {
           brand: brand.trim() || null,
           mold: mold.trim() || null,
           plastic: plastic.trim() || null,
-          condition: condition.trim() || null,
+          condition: condNum,
           weight: Number.isFinite(weightNum) ? weightNum : null,
           price: Number.isFinite(priceNum) ? priceNum : null,
           city: city.trim() || null,
@@ -659,16 +667,29 @@ export default function EditListing() {
                 />
               </div>
               <div className="field">
-                <label htmlFor="condition">Condition</label>
-                <input
-                  id="condition"
-                  type="text"
-                  value={condition}
-                  onChange={(e) => setCondition(e.target.value)}
-                  placeholder="Like New, Excellent, Good…"
-                  autoComplete="off"
-                />
-              </div>
+   <label htmlFor="condition">Condition (Sleepy Scale 1–10)</label>
+   <input
+     id="condition"
+     type="number"
+     min={1}
+     max={10}
+     step={1}
+     inputMode="numeric"
+     placeholder="e.g., 8"
+     value={conditionScore}
+     onChange={(e) => setConditionScore(e.target.value)}
+     onBlur={() => {
+       setConditionScore((prev) => {
+         if (prev === "") return prev;
+         const n = Number(prev);
+         if (!Number.isFinite(n)) return "";
+         return String(Math.max(1, Math.min(10, Math.round(n))));
+       });
+     }}
+   />
+   <p className="hintRow">Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new</p>
+  <p className="hintRow"><a href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">Learn more about Sleepy Scale here</a></p>
+ </div>
 
               {/* Weight | Price */}
               <div className="field">
