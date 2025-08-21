@@ -409,6 +409,13 @@ const styles = `
   .info { background: #f4fff9; border: 1px solid #d1f5e5; color: #1a6a58; }
   .error { background: #fff5f4; border: 1px solid #ffd9d5; color: #8c2f28; }
 
+  /* Prevent 100%-width inputs from spilling past the card */
+  .form { display: grid; gap: 10px; margin-top: 8px; min-width: 0; }
+  .input, .btn {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
   .form { display: grid; gap: 10px; margin-top: 8px; }
 
   .label { font-weight: 600; color: var(--storm); }
@@ -428,6 +435,8 @@ const styles = `
 
   .btn {
     width: 100%;
+    box-sizing: border-box;
+    max-width: 100%;
     border: none; border-radius: 10px; padding: 12px 16px;
     font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
     gap: 10px; font-size: 15px;
