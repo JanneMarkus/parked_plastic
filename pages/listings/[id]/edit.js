@@ -35,11 +35,13 @@ export default function EditListing() {
   const [glide, setGlide] = useState("");
   const [turn, setTurn] = useState("");
   const [fade, setFade] = useState("");
+  const [isInked, setIsInked] = useState(false);
+  const [isGlow, setIsGlow] = useState(false);
 
   // Images
   const [existingImages, setExistingImages] = useState([]); // from current listing
-  const [files, setFiles] = useState([]);                   // new uploads (optional)
-  const [previews, setPreviews] = useState([]);             // object URLs for new uploads
+  const [files, setFiles] = useState([]); // new uploads (optional)
+  const [previews, setPreviews] = useState([]); // object URLs for new uploads
 
   // UI state
   const [errorMsg, setErrorMsg] = useState("");
@@ -61,13 +63,20 @@ export default function EditListing() {
 
       if (!u) {
         // Defer redirect until we know id to preserve return path
-        if (id) router.replace(`/login?redirect=${encodeURIComponent(`/listings/${id}/edit`)}`);
+        if (id)
+          router.replace(
+            `/login?redirect=${encodeURIComponent(`/listings/${id}/edit`)}`
+          );
         return;
       }
       if (!id) return;
 
       setLoading(true);
-      const { data: d, error } = await supabase.from("discs").select("*").eq("id", id).single();
+      const { data: d, error } = await supabase
+        .from("discs")
+        .select("*")
+        .eq("id", id)
+        .single();
       if (error || !d) {
         alert("Listing not found.");
         router.push("/account");
@@ -101,7 +110,9 @@ export default function EditListing() {
       setFade(d.fade ?? "");
       setLoading(false);
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [id, router]);
 
   // Cleanup previews
@@ -112,7 +123,11 @@ export default function EditListing() {
   // ---- Image helpers (same pipeline as create) ----
   async function fileToImageBitmap(file) {
     if (typeof createImageBitmap === "function") {
-      try { return await createImageBitmap(file); } catch { /* fallback */ }
+      try {
+        return await createImageBitmap(file);
+      } catch {
+        /* fallback */
+      }
     }
     const dataUrl = await new Promise((resolve) => {
       const r = new FileReader();
@@ -130,10 +145,15 @@ export default function EditListing() {
     return img;
   }
 
-  async function resizeIfNeeded(file, maxEdge = MAX_EDGE_PX, quality = JPEG_QUALITY) {
+  async function resizeIfNeeded(
+    file,
+    maxEdge = MAX_EDGE_PX,
+    quality = JPEG_QUALITY
+  ) {
     try {
       const img = await fileToImageBitmap(file);
-      const w = img.width, h = img.height;
+      const w = img.width,
+        h = img.height;
       if (!w || !h) return file;
       const maxCurrent = Math.max(w, h);
       if (maxCurrent <= maxEdge) return file;
@@ -146,15 +166,21 @@ export default function EditListing() {
         const canvas = new OffscreenCanvas(outW, outH);
         const ctx = canvas.getContext("2d", { alpha: false });
         ctx.drawImage(img, 0, 0, outW, outH);
-        const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+        const blob = await canvas.convertToBlob({
+          type: "image/jpeg",
+          quality,
+        });
         const outName = (file.name || "image").replace(/\.[^.]+$/, "") + ".jpg";
         return new File([blob], outName, { type: "image/jpeg" });
       } else {
         const c = document.createElement("canvas");
-        c.width = outW; c.height = outH;
+        c.width = outW;
+        c.height = outH;
         const ctx = c.getContext("2d", { alpha: false });
         ctx.drawImage(img, 0, 0, outW, outH);
-        const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", quality));
+        const blob = await new Promise((res) =>
+          c.toBlob(res, "image/jpeg", quality)
+        );
         const outName = (file.name || "image").replace(/\.[^.]+$/, "") + ".jpg";
         return new File([blob], outName, { type: "image/jpeg" });
       }
@@ -173,8 +199,13 @@ export default function EditListing() {
 
     try {
       const heic2any = (await import("heic2any")).default;
-      const blob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
-      const outName = (file.name || "image").replace(/\.(heic|heif)$/i, "") + ".jpg";
+      const blob = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.9,
+      });
+      const outName =
+        (file.name || "image").replace(/\.(heic|heif)$/i, "") + ".jpg";
       return new File([blob], outName, { type: "image/jpeg" });
     } catch (e) {
       console.warn("HEIC conversion failed; using original file", e);
@@ -197,10 +228,14 @@ export default function EditListing() {
 
       let combined = [...resized]; // replace mode; user is explicitly choosing new images
       if (combined.length > MAX_FILES) {
-        setErrorMsg(`You selected ${combined.length} files. Max is ${MAX_FILES}. Extra files were ignored.`);
+        setErrorMsg(
+          `You selected ${combined.length} files. Max is ${MAX_FILES}. Extra files were ignored.`
+        );
         combined = combined.slice(0, MAX_FILES);
       }
-      const filtered = combined.filter((f) => f.size <= MAX_FILE_MB * 1024 * 1024);
+      const filtered = combined.filter(
+        (f) => f.size <= MAX_FILE_MB * 1024 * 1024
+      );
       if (filtered.length < combined.length) {
         setErrorMsg(`Some files were skipped for exceeding ${MAX_FILE_MB}MB.`);
       }
@@ -218,21 +253,41 @@ export default function EditListing() {
   };
 
   // Drag-and-drop
-  const onDragOver = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
-  const onDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
-  const onDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
+  const onDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const onDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const onDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
   const onDrop = async (e) => {
-    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
-    if (e.dataTransfer?.files?.length) await processPickedFiles(e.dataTransfer.files);
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer?.files?.length)
+      await processPickedFiles(e.dataTransfer.files);
   };
 
   // ---------- Upload + save ----------
   async function uploadToBucket(file, userId) {
     const ext = (file.name?.split(".").pop() || "jpg").toLowerCase();
-    const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const path = `${userId}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
     const { error: upErr } = await supabase.storage
       .from("listing-images")
-      .upload(path, file, { cacheControl: "31536000, immutable", upsert: false });
+      .upload(path, file, {
+        cacheControl: "31536000, immutable",
+        upsert: false,
+      });
     if (upErr) throw upErr;
     const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
     return data?.publicUrl || null;
@@ -250,21 +305,32 @@ export default function EditListing() {
     }
 
     // Flight validation (required if missing; always validated for correctness)
-    const stepIsValid = (v) => Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
+    const stepIsValid = (v) =>
+      Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
     const numOrNaN = (s) => (s === "" ? NaN : Number(s));
-    const s = numOrNaN(speed), g = numOrNaN(glide), t = numOrNaN(turn), f = numOrNaN(fade);
+    const s = numOrNaN(speed),
+      g = numOrNaN(glide),
+      t = numOrNaN(turn),
+      f = numOrNaN(fade);
     const flightErrors = [];
-    if (!Number.isFinite(s) || s < 0 || s > 15 || !stepIsValid(s)) flightErrors.push("Speed must be 0–15 in 0.5 steps.");
-    if (!Number.isFinite(g) || g < 0 || g > 7 || !stepIsValid(g))  flightErrors.push("Glide must be 0–7 in 0.5 steps.");
-    if (!Number.isFinite(t) || t < -5 || t > 1 || !stepIsValid(t)) flightErrors.push("Turn must be -5 to 1 in 0.5 steps.");
-    if (!Number.isFinite(f) || f < 0 || f > 6 || !stepIsValid(f))  flightErrors.push("Fade must be 0–6 in 0.5 steps.");
+    if (!Number.isFinite(s) || s < 0 || s > 15 || !stepIsValid(s))
+      flightErrors.push("Speed must be 0–15 in 0.5 steps.");
+    if (!Number.isFinite(g) || g < 0 || g > 7 || !stepIsValid(g))
+      flightErrors.push("Glide must be 0–7 in 0.5 steps.");
+    if (!Number.isFinite(t) || t < -5 || t > 1 || !stepIsValid(t))
+      flightErrors.push("Turn must be -5 to 1 in 0.5 steps.");
+    if (!Number.isFinite(f) || f < 0 || f > 6 || !stepIsValid(f))
+      flightErrors.push("Fade must be 0–6 in 0.5 steps.");
     if (flightErrors.length) {
       setErrorMsg(flightErrors[0]);
       return;
     }
     // Validate numbers
     const weightNum = weight === "" ? null : Number(weight);
-    if (weight !== "" && (Number.isNaN(weightNum) || weightNum < 120 || weightNum > 200)) {
+    if (
+      weight !== "" &&
+      (Number.isNaN(weightNum) || weightNum < 120 || weightNum > 200)
+    ) {
       setErrorMsg("Weight should be between 120 and 200 grams.");
       return;
     }
@@ -305,6 +371,8 @@ export default function EditListing() {
           glide: g,
           turn: t,
           fade: f,
+          is_inked: isInked,
+          is_glow: isGlow,
         })
         .eq("id", disc.id);
 
@@ -321,7 +389,10 @@ export default function EditListing() {
     }
   }
 
-  const canSubmit = useMemo(() => title.trim().length > 0 && !saving, [title, saving]);
+  const canSubmit = useMemo(
+    () => title.trim().length > 0 && !saving,
+    [title, saving]
+  );
 
   // ---------- UI ----------
   if (checking || loading) {
@@ -333,9 +404,19 @@ export default function EditListing() {
         </Head>
         <p className="center muted">Loading…</p>
         <style jsx>{`
-          .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
-          .center { text-align: center; margin-top: 40px; }
-          .muted { color: #3A3A3A; opacity: .85; }
+          .wrap {
+            max-width: 960px;
+            margin: 32px auto;
+            padding: 0 16px;
+          }
+          .center {
+            text-align: center;
+            margin-top: 40px;
+          }
+          .muted {
+            color: #3a3a3a;
+            opacity: 0.85;
+          }
         `}</style>
       </main>
     );
@@ -346,13 +427,18 @@ export default function EditListing() {
     <main className="wrap">
       <Head>
         <title>Edit Listing — Parked Plastic</title>
-        <meta name="description" content="Edit your Parked Plastic disc listing." />
+        <meta
+          name="description"
+          content="Edit your Parked Plastic disc listing."
+        />
       </Head>
       <style jsx>{styles}</style>
 
       <div className="titleRow">
         <h1>Edit Listing</h1>
-        <p className="subtle">Make changes and save. Leave fields blank if not applicable.</p>
+        <p className="subtle">
+          Make changes and save. Leave fields blank if not applicable.
+        </p>
       </div>
 
       {/* Existing images (readonly preview) */}
@@ -366,7 +452,9 @@ export default function EditListing() {
               </div>
             ))}
           </div>
-          <p className="hintRow">Selecting new images below will replace these.</p>
+          <p className="hintRow">
+            Selecting new images below will replace these.
+          </p>
         </div>
       )}
 
@@ -398,163 +486,215 @@ export default function EditListing() {
                   onChange={handleFileChange}
                 />
                 <p className="uploaderHint">
-                  Drag & drop or click to upload • Up to {MAX_FILES} photos • Each ≤ {MAX_FILE_MB}MB • 4:3 ratio looks best •
-                  HEIC auto‑converted • Large images auto‑downsized
+                  Drag & drop or click to upload • Up to {MAX_FILES} photos •
+                  Each ≤ {MAX_FILE_MB}MB • 4:3 ratio looks best • HEIC
+                  auto‑converted • Large images auto‑downsized
                 </p>
               </div>
-            
-            {/* Title */}
-            <div className="field span2">
-              <label htmlFor="title">Title*</label>
-              <input
-                id="title"
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., 175g Star Destroyer — Blue"
-                autoComplete="off"
-                maxLength={120}
-              />
-            </div>
 
-            {/* Brand | Mold */}
-            <div className="field">
-              <label htmlFor="brand">Brand</label>
-              <input
-                id="brand"
-                type="text"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                placeholder="Innova, Discraft, MVP…"
-                autoComplete="off"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="mold">Mold</label>
-              <input
-                id="mold"
-                type="text"
-                value={mold}
-                onChange={(e) => setMold(e.target.value)}
-                placeholder="Destroyer, Buzzz, Hex…"
-                autoComplete="off"
-              />
-            </div>
+              {/* Title */}
+              <div className="field span2">
+                <label htmlFor="title">Title*</label>
+                <input
+                  id="title"
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., 175g Star Destroyer — Blue"
+                  autoComplete="off"
+                  maxLength={120}
+                />
+              </div>
 
-            {/* Flight Numbers (REQUIRED to add if missing on legacy) */}
-            <div className="field span2">
-              <label>Flight Numbers*</label>
-              <div className="flightGrid">
-                <div className="flightField">
-                  <span className="ffLabel">Speed</span>
-                  <input
-                    type="number" step="0.5" min={0} max={15} required
-                    value={speed} onChange={(e)=>setSpeed(e.target.value)} inputMode="decimal"
-                  />
+              {/* Brand | Mold */}
+              <div className="field">
+                <label htmlFor="brand">Brand</label>
+                <input
+                  id="brand"
+                  type="text"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  placeholder="Innova, Discraft, MVP…"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="mold">Mold</label>
+                <input
+                  id="mold"
+                  type="text"
+                  value={mold}
+                  onChange={(e) => setMold(e.target.value)}
+                  placeholder="Destroyer, Buzzz, Hex…"
+                  autoComplete="off"
+                />
+              </div>
+
+              {/* Flight Numbers (REQUIRED to add if missing on legacy) */}
+              <div className="field span2">
+                <label>Flight Numbers*</label>
+                <div className="flightGrid">
+                  <div className="flightField">
+                    <span className="ffLabel">Speed</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min={0}
+                      max={15}
+                      required
+                      value={speed}
+                      onChange={(e) => setSpeed(e.target.value)}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="flightField">
+                    <span className="ffLabel">Glide</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min={0}
+                      max={7}
+                      required
+                      value={glide}
+                      onChange={(e) => setGlide(e.target.value)}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="flightField">
+                    <span className="ffLabel">Turn</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min={-5}
+                      max={1}
+                      required
+                      value={turn}
+                      onChange={(e) => setTurn(e.target.value)}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="flightField">
+                    <span className="ffLabel">Fade</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min={0}
+                      max={6}
+                      required
+                      value={fade}
+                      onChange={(e) => setFade(e.target.value)}
+                      inputMode="decimal"
+                    />
+                  </div>
                 </div>
-                <div className="flightField">
-                  <span className="ffLabel">Glide</span>
-                  <input
-                    type="number" step="0.5" min={0} max={7} required
-                    value={glide} onChange={(e)=>setGlide(e.target.value)} inputMode="decimal"
-                  />
-                </div>
-                <div className="flightField">
-                  <span className="ffLabel">Turn</span>
-                  <input
-                    type="number" step="0.5" min={-5} max={1} required
-                    value={turn} onChange={(e)=>setTurn(e.target.value)} inputMode="decimal"
-                  />
-                </div>
-                <div className="flightField">
-                  <span className="ffLabel">Fade</span>
-                  <input
-                    type="number" step="0.5" min={0} max={6} required
-                    value={fade} onChange={(e)=>setFade(e.target.value)} inputMode="decimal"
-                  />
+                <p className="hintRow">
+                  Use 0.5 increments. Example: 12 / 5 / -1 / 3
+                </p>
+              </div>
+
+              {/* Plastic | Condition (text to mirror create form) */}
+              <div className="field">
+                <label htmlFor="plastic">Plastic</label>
+                <input
+                  id="plastic"
+                  type="text"
+                  value={plastic}
+                  onChange={(e) => setPlastic(e.target.value)}
+                  placeholder="Star, Z, Neutron…"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="condition">Condition</label>
+                <input
+                  id="condition"
+                  type="text"
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
+                  placeholder="Like New, Excellent, Good…"
+                  autoComplete="off"
+                />
+              </div>
+
+              {/* Weight | Price */}
+              <div className="field">
+                <label htmlFor="weight">
+                  Weight (g) <span className="hint">(optional)</span>
+                </label>
+                <input
+                  id="weight"
+                  type="number"
+                  min={120}
+                  max={200}
+                  inputMode="numeric"
+                  placeholder="e.g., 175"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="price">Price (CAD)</label>
+                <input
+                  id="price"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  inputMode="decimal"
+                  placeholder="e.g., 25.00"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                />
+              </div>
+
+              {/* City */}
+              <div className="field span2">
+                <label htmlFor="city">City</label>
+                <input
+                  id="city"
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Where the disc is located"
+                  autoComplete="off"
+                />
+              </div>
+
+              {/* Extras */}
+              <div className="field span2">
+                <label>Extras</label>
+                <div className="checks">
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={isInked}
+                      onChange={(e) => setIsInked(e.target.checked)}
+                    />
+                    <span>Is it inked?</span>
+                  </label>
+
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={isGlow}
+                      onChange={(e) => setIsGlow(e.target.checked)}
+                    />
+                    <span>Is it a glow disc?</span>
+                  </label>
                 </div>
               </div>
-              <p className="hintRow">Use 0.5 increments. Example: 12 / 5 / -1 / 3</p>
-            </div>
 
-            {/* Plastic | Condition (text to mirror create form) */}
-            <div className="field">
-              <label htmlFor="plastic">Plastic</label>
-              <input
-                id="plastic"
-                type="text"
-                value={plastic}
-                onChange={(e) => setPlastic(e.target.value)}
-                placeholder="Star, Z, Neutron…"
-                autoComplete="off"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="condition">Condition</label>
-              <input
-                id="condition"
-                type="text"
-                value={condition}
-                onChange={(e) => setCondition(e.target.value)}
-                placeholder="Like New, Excellent, Good…"
-                autoComplete="off"
-              />
-            </div>
-
-            {/* Weight | Price */}
-            <div className="field">
-              <label htmlFor="weight">Weight (g) <span className="hint">(optional)</span></label>
-              <input
-                id="weight"
-                type="number"
-                min={120}
-                max={200}
-                inputMode="numeric"
-                placeholder="e.g., 175"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="price">Price (CAD)</label>
-              <input
-                id="price"
-                type="number"
-                step="0.01"
-                min={0}
-                inputMode="decimal"
-                placeholder="e.g., 25.00"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-              />
-            </div>
-
-            {/* City */}
-            <div className="field span2">
-              <label htmlFor="city">City</label>
-              <input
-                id="city"
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Where the disc is located"
-                autoComplete="off"
-              />
-            </div>
-
-            {/* Description */}
-            <div className="field span2">
-              <label htmlFor="description">Description</label>
-              <textarea
-                id="description"
-                rows={6}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Notes about ink, dome, wear, trades…"
-              />
-            </div>
-
+              {/* Description */}
+              <div className="field span2">
+                <label htmlFor="description">Description</label>
+                <textarea
+                  id="description"
+                  rows={6}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Notes about ink, dome, wear, trades…"
+                />
+              </div>
 
               {previews.length > 0 && (
                 <>
@@ -566,7 +706,9 @@ export default function EditListing() {
                       </div>
                     ))}
                   </div>
-                  <p className="hintRow">New images will replace current ones on save.</p>
+                  <p className="hintRow">
+                    New images will replace current ones on save.
+                  </p>
                 </>
               )}
             </div>
@@ -586,10 +728,19 @@ export default function EditListing() {
 
             {/* Actions */}
             <div className="actions span2">
-              <button type="button" className="btn btn-ghost" onClick={() => router.push("/account")} disabled={saving}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => router.push("/account")}
+                disabled={saving}
+              >
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={!canSubmit}
+              >
                 {saving ? "Saving…" : "Save changes"}
               </button>
             </div>
@@ -750,6 +901,10 @@ const styles = `
   .btn-primary:hover { background: var(--teal-dark); }
   .btn-ghost { background: #fff; color: var(--storm); border: 2px solid var(--storm); }
   .btn-ghost:hover { background: var(--storm); color: #fff; }
+
+  .checks { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--storm); }
+.check input { transform: translateY(1px); }
 
   @media (min-width: 768px) {
     h1 { font-size: 2rem; }
