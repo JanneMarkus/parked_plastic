@@ -463,14 +463,14 @@ export default function EditListing() {
                 <div className="flightField">
                   <span className="ffLabel">Turn</span>
                   <input
-                    type="number" step="0.5" min={-5} max={5} required
+                    type="number" step="0.5" min={-5} max={1} required
                     value={turn} onChange={(e)=>setTurn(e.target.value)} inputMode="decimal"
                   />
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Fade</span>
                   <input
-                    type="number" step="0.5" min={0} max={5} required
+                    type="number" step="0.5" min={0} max={6} required
                     value={fade} onChange={(e)=>setFade(e.target.value)} inputMode="decimal"
                   />
                 </div>

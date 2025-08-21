@@ -620,7 +620,7 @@ export default function CreateListing() {
                     type="number"
                     step="0.5"
                     min={-5}
-                    max={5}
+                    max={1}
                     required
                     value={turn}
                     onChange={(e) => setTurn(e.target.value)}
@@ -634,7 +634,7 @@ export default function CreateListing() {
                     type="number"
                     step="0.5"
                     min={0}
-                    max={5}
+                    max={6}
                     required
                     value={fade}
                     onChange={(e) => setFade(e.target.value)}
