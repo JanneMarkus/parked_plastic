@@ -31,6 +31,8 @@ export default function CreateListing() {
   const [weight, setWeight] = useState(""); // optional -> NULL if blank
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
+  const [isInked, setIsInked] = useState(false);
+  const [isGlow, setIsGlow] = useState(false);
 
   // Images
   const [files, setFiles] = useState([]); // normalized, converted & possibly resized
@@ -369,6 +371,9 @@ export default function CreateListing() {
           glide: g,
           turn: t,
           fade: f,
+          // NEW:
+          is_inked: isInked,
+          is_glow: isGlow,
         },
       ]);
       if (error) throw error;
@@ -674,9 +679,7 @@ export default function CreateListing() {
 
             {/* Weight | Price */}
             <div className="field">
-              <label htmlFor="weight">
-                Weight (g)
-              </label>
+              <label htmlFor="weight">Weight (g)</label>
               <input
                 id="weight"
                 type="number"
@@ -700,6 +703,30 @@ export default function CreateListing() {
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
               />
+            </div>
+
+            {/* Extras: Inked / Glow */}
+            <div className="field span2">
+              <label>Extras</label>
+              <div className="checks">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={isInked}
+                    onChange={(e) => setIsInked(e.target.checked)}
+                  />
+                  <span>Is it inked?</span>
+                </label>
+
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={isGlow}
+                    onChange={(e) => setIsGlow(e.target.checked)}
+                  />
+                  <span>Is it a glow disc?</span>
+                </label>
+              </div>
             </div>
 
             {/* Description */}
@@ -898,6 +925,10 @@ const styles = `
     text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
   }
   .btn-ghost:hover { background: var(--storm); color: #fff; }
+
+  .checks { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--storm); }
+  .check input { transform: translateY(1px); }
 
   /* Desktop tweaks */
   @media (min-width: 768px) {
