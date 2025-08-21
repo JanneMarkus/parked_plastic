@@ -647,7 +647,7 @@ export default function EditListing() {
                 />
               </div>
 
-              {/* City */}
+              {/* City
               <div className="field span2">
                 <label htmlFor="city">City</label>
                 <input
@@ -658,28 +658,27 @@ export default function EditListing() {
                   placeholder="Where the disc is located"
                   autoComplete="off"
                 />
-              </div>
+              </div> */}
 
               {/* Extras */}
               <div className="field span2">
-                <label>Extras</label>
                 <div className="checks">
                   <label className="check">
+                    <span>Is it inked?</span>
                     <input
                       type="checkbox"
                       checked={isInked}
                       onChange={(e) => setIsInked(e.target.checked)}
                     />
-                    <span>Is it inked?</span>
                   </label>
 
                   <label className="check">
+                    <span>Is it a glow disc?</span>
                     <input
                       type="checkbox"
                       checked={isGlow}
                       onChange={(e) => setIsGlow(e.target.checked)}
                     />
-                    <span>Is it a glow disc?</span>
                   </label>
                 </div>
               </div>

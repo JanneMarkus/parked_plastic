@@ -270,13 +270,14 @@ export default function ListingDetail() {
             <div className="spec"><label>Plastic</label><div>{disc.plastic || "—"}</div></div>
             {flightLine && (
               <div className="spec">
-                <label>Flight</label>
+                <label>Flight Numbers</label>
                 <div aria-label="Flight numbers">{flightLine}</div>
               </div>
             )}
             <div className="spec"><label>Weight</label><div>{disc.weight != null ? `${disc.weight} g` : "N/A"}</div></div>
             <div className="spec"><label>Condition</label><div>{disc.condition || "—"}</div></div>
-            <div className="spec"><label>City</label><div>{disc.city || "Local"}</div></div>
+            <div className="spec"><label>Glow Disc?</label><div>{disc.is_glow ==true ? "Yes" : disc.is_glow ==false ? "No" : "Not Specified"}</div></div>
+            <div className="spec"><label>Inked?</label><div>{disc.is_inked ==true ? "Yes" : disc.is_inked ==false ? "No" : "Not Specified"}</div></div>
           </div>
 
           <div className="seller">

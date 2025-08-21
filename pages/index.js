@@ -56,6 +56,7 @@ export default function Home() {
   const [turnMax, setTurnMax] = useState("");
   const [fadeMin, setFadeMin] = useState("");
   const [fadeMax, setFadeMax] = useState("");
+  
 
   // Blur placeholder cache
   const [blurs, setBlurs] = useState({});
@@ -70,7 +71,7 @@ export default function Home() {
       try {
         let query = supabase
           .from("discs")
-          .select("id,title,brand,mold,weight,condition,price,is_sold,image_urls,created_at,speed,glide,turn,fade")
+          .select("id,title,brand,mold,weight,condition,price,is_sold,image_urls,created_at,speed,glide,turn,fade,is_inked,is_glow")
           .order("created_at", { ascending: false });
 
         if (!includeSold) query = query.eq("is_sold", false);
@@ -504,8 +505,10 @@ export default function Home() {
                     {d.mold ? ` • ${d.mold}` : ""}
                   </div>
                   <div className="specs">
-                    <span>{d.weight != null ? `${d.weight} g` : "N/A"}</span>
+                    {d.weight && <span>{d.weight} g</span>}
+                    {d.is_glow && <span>Glow</span>}
                     {d.condition && <span>{d.condition}</span>}
+                    {d.is_inked && <span>Inked</span>}
                   </div>
                   {price && <div className="price pp-badge pp-badge--teal">{price}</div>}
                 </div>
