@@ -5,6 +5,9 @@ import Header from "@/components/Header";
 import GlobalStyles from "@/components/GlobalStyles";
 import { Poppins, Source_Sans_3 } from "next/font/google";
 import "@/styles/globals.css";
+import { Analytics } from "@vercel/analytics/next"
+
+<Analytics />
 
 const poppins = Poppins({
   subsets: ["latin"],
