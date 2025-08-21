@@ -47,6 +47,8 @@ export default function Home() {
   const [minWeight, setMinWeight] = useState("");
   const [maxWeight, setMaxWeight] = useState("");
   const [includeSold, setIncludeSold] = useState(false);
+  const [onlyGlow, setOnlyGlow] = useState(false);
+  const [excludeInked, setExcludeInked] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [speedMin, setSpeedMin] = useState("");
   const [speedMax, setSpeedMax] = useState("");
@@ -75,6 +77,8 @@ export default function Home() {
           .order("created_at", { ascending: false });
 
         if (!includeSold) query = query.eq("is_sold", false);
+        if (onlyGlow) query = query.eq("is_glow", true);
+        if (excludeInked) query = query.neq("is_inked", true); // includes NULL + false
 
         const term = debouncedSearch.trim();
         if (term) {
@@ -138,7 +142,7 @@ export default function Home() {
     brand, mold, condition,
     minPrice, maxPrice, minWeight, maxWeight,
     speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax,
-    includeSold
+    includeSold, onlyGlow, excludeInked
   ]);
 
   // Prefetch blurDataURL
@@ -169,6 +173,8 @@ export default function Home() {
       minWeight !== "" ? "minWeight" : "",
       maxWeight !== "" ? "maxWeight" : "",
       includeSold ? "includeSold" : "",
+      onlyGlow ? "onlyGlow" : "",
+      excludeInked ? "excludeInked" : "",
       debouncedSearch.trim() ? "q" : "",
     ];
     const flight = [
@@ -207,6 +213,8 @@ export default function Home() {
     setFadeMin("");
     setFadeMax("");
     setIncludeSold(false);
+    setOnlyGlow(false);
+    setExcludeInked(false);
   }
 
   return (
@@ -445,6 +453,22 @@ export default function Home() {
                       onChange={(e) => setIncludeSold(e.target.checked)}
                     />
                     Include sold listings
+                  </label>
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={onlyGlow}
+                      onChange={(e) => setOnlyGlow(e.target.checked)}
+                    />
+                    Show Only Glow discs
+                  </label>
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={excludeInked}
+                      onChange={(e) => setExcludeInked(e.target.checked)}
+                    />
+                    Exclude Inked discs
                   </label>
                 </div>
               </div>
