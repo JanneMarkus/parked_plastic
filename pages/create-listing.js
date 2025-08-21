@@ -440,7 +440,7 @@ export default function CreateListing() {
               )
             }
           >
-            Sign in with Google
+            Sign In
           </button>
         </div>
       </main>
