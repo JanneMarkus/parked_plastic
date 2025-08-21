@@ -21,8 +21,18 @@ const sourceSans = Source_Sans_3({
   variable: "--font-source",
 });
 
-const CONDITION_OPTIONS = ["New", "Like New", "Excellent", "Good", "Used", "Beat"];
-const CAD = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
+const CONDITION_OPTIONS = [
+  "New",
+  "Like New",
+  "Excellent",
+  "Good",
+  "Used",
+  "Beat",
+];
+const CAD = new Intl.NumberFormat("en-CA", {
+  style: "currency",
+  currency: "CAD",
+});
 
 function useDebouncedValue(value, delay = 450) {
   const [debounced, setDebounced] = useState(value);
@@ -31,6 +41,112 @@ function useDebouncedValue(value, delay = 450) {
     return () => clearTimeout(t);
   }, [value, delay]);
   return debounced;
+}
+
+function toNum(v, fallback) {
+  if (v === "" || v === null || v === undefined) return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function pct(val, min, max) {
+  return ((val - min) / (max - min)) * 100;
+}
+
+/**
+ * DualRange — a two-thumb slider that still supports "unset" (empty string) for either side.
+ * Props:
+ *  - label, min, max, step
+ *  - minState = [value, setter]  (string "" | number-like)
+ *  - maxState = [value, setter]
+ *  - unit (optional): e.g. "g", "/10"
+ */
+function DualRange({
+  label,
+  min,
+  max,
+  step = 1,
+  minState,
+  maxState,
+  unit = "",
+}) {
+  const [loVal, setLoVal] = minState;
+  const [hiVal, setHiVal] = maxState;
+
+  // Effective numbers for rendering the thumbs (fallback to full span when unset)
+  const lo = toNum(loVal, min);
+  const hi = toNum(hiVal, max);
+
+  const left = Math.max(min, Math.min(lo, hi));
+  const right = Math.min(max, Math.max(hi, lo));
+
+  const leftPct = pct(left, min, max);
+  const rightPct = pct(right, min, max);
+
+  const showLeft = loVal !== "";
+  const showRight = hiVal !== "";
+
+  const onChangeMin = (e) => {
+    const v = Number(e.target.value);
+    const clamped = Math.min(v, right);
+    setLoVal(String(clamped));
+  };
+  const onChangeMax = (e) => {
+    const v = Number(e.target.value);
+    const clamped = Math.max(v, left);
+    setHiVal(String(clamped));
+  };
+
+  const clear = () => {
+    setLoVal("");
+    setHiVal("");
+  };
+
+  return (
+    <div className="pp-field flight">
+      <label className="pp-range-label">
+        <span>{label}</span>
+        <span className="pp-range-readout">
+          {showLeft ? left : "Any"} – {showRight ? right : "Any"}
+          {unit && (showLeft || showRight) ? unit : ""}
+          {(showLeft || showRight) && (
+            <button
+              type="button"
+              className="pp-clear"
+              onClick={clear}
+              aria-label={`Clear ${label} filter`}
+            >
+              ×
+            </button>
+          )}
+        </span>
+      </label>
+
+      <div
+        className="pp-dualrange"
+        style={{ "--l": `${leftPct}%`, "--r": `${rightPct}%` }}
+      >
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={left}
+          onChange={onChangeMin}
+          aria-label={`${label} min`}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={right}
+          onChange={onChangeMax}
+          aria-label={`${label} max`}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -59,7 +175,6 @@ export default function Home() {
   const [turnMax, setTurnMax] = useState("");
   const [fadeMin, setFadeMin] = useState("");
   const [fadeMax, setFadeMax] = useState("");
-  
 
   // Blur placeholder cache
   const [blurs, setBlurs] = useState({});
@@ -74,7 +189,9 @@ export default function Home() {
       try {
         let query = supabase
           .from("discs")
-          .select("id,title,brand,mold,weight,condition,price,is_sold,image_urls,created_at,speed,glide,turn,fade,is_inked,is_glow")
+          .select(
+            "id,title,brand,mold,weight,condition,price,is_sold,image_urls,created_at,speed,glide,turn,fade,is_inked,is_glow"
+          )
           .order("created_at", { ascending: false });
 
         if (!includeSold) query = query.eq("is_sold", false);
@@ -97,36 +214,54 @@ export default function Home() {
 
         if (brand.trim()) query = query.ilike("brand", brand.trim());
         if (mold.trim()) query = query.ilike("mold", mold.trim());
-        
+
         const minC = minCondition !== "" ? Number(minCondition) : null;
         const maxC = maxCondition !== "" ? Number(maxCondition) : null;
-        if (minC !== null && !Number.isNaN(minC)) query = query.gte("condition", minC);
-        if (maxC !== null && !Number.isNaN(maxC)) query = query.lte("condition", maxC);
+        if (minC !== null && !Number.isNaN(minC))
+          query = query.gte("condition", minC);
+        if (maxC !== null && !Number.isNaN(maxC))
+          query = query.lte("condition", maxC);
 
         const minP = minPrice !== "" ? Number(minPrice) : null;
         const maxP = maxPrice !== "" ? Number(maxPrice) : null;
-        if (minP !== null && !Number.isNaN(minP)) query = query.gte("price", minP);
-        if (maxP !== null && !Number.isNaN(maxP)) query = query.lte("price", maxP);
+        if (minP !== null && !Number.isNaN(minP))
+          query = query.gte("price", minP);
+        if (maxP !== null && !Number.isNaN(maxP))
+          query = query.lte("price", maxP);
 
         const minW = minWeight !== "" ? Number(minWeight) : null;
         const maxW = maxWeight !== "" ? Number(maxWeight) : null;
-        if (minW !== null && !Number.isNaN(minW)) query = query.gte("weight", minW);
-        if (maxW !== null && !Number.isNaN(maxW)) query = query.lte("weight", maxW);
+        if (minW !== null && !Number.isNaN(minW))
+          query = query.gte("weight", minW);
+        if (maxW !== null && !Number.isNaN(maxW))
+          query = query.lte("weight", maxW);
 
         // Flight ranges
         const rng = (val) => (val !== "" && val !== null ? Number(val) : null);
-        const sMin = rng(speedMin), sMax = rng(speedMax);
-        const gMin = rng(glideMin), gMax = rng(glideMax);
-        const tMin = rng(turnMin),  tMax = rng(turnMax);
-        const fMin = rng(fadeMin),  fMax = rng(fadeMax);
-        if (sMin !== null && !Number.isNaN(sMin)) query = query.gte("speed", sMin);
-        if (sMax !== null && !Number.isNaN(sMax)) query = query.lte("speed", sMax);
-        if (gMin !== null && !Number.isNaN(gMin)) query = query.gte("glide", gMin);
-        if (gMax !== null && !Number.isNaN(gMax)) query = query.lte("glide", gMax);
-        if (tMin !== null && !Number.isNaN(tMin)) query = query.gte("turn", tMin);
-        if (tMax !== null && !Number.isNaN(tMax)) query = query.lte("turn", tMax);
-        if (fMin !== null && !Number.isNaN(fMin)) query = query.gte("fade", fMin);
-        if (fMax !== null && !Number.isNaN(fMax)) query = query.lte("fade", fMax);
+        const sMin = rng(speedMin),
+          sMax = rng(speedMax);
+        const gMin = rng(glideMin),
+          gMax = rng(glideMax);
+        const tMin = rng(turnMin),
+          tMax = rng(turnMax);
+        const fMin = rng(fadeMin),
+          fMax = rng(fadeMax);
+        if (sMin !== null && !Number.isNaN(sMin))
+          query = query.gte("speed", sMin);
+        if (sMax !== null && !Number.isNaN(sMax))
+          query = query.lte("speed", sMax);
+        if (gMin !== null && !Number.isNaN(gMin))
+          query = query.gte("glide", gMin);
+        if (gMax !== null && !Number.isNaN(gMax))
+          query = query.lte("glide", gMax);
+        if (tMin !== null && !Number.isNaN(tMin))
+          query = query.gte("turn", tMin);
+        if (tMax !== null && !Number.isNaN(tMax))
+          query = query.lte("turn", tMax);
+        if (fMin !== null && !Number.isNaN(fMin))
+          query = query.gte("fade", fMin);
+        if (fMax !== null && !Number.isNaN(fMax))
+          query = query.lte("fade", fMax);
 
         const { data, error } = await query;
         if (error) throw error;
@@ -144,11 +279,25 @@ export default function Home() {
     };
   }, [
     debouncedSearch,
-    brand, mold,
-    minCondition, maxCondition,
-    minPrice, maxPrice, minWeight, maxWeight,
-    speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax,
-    includeSold, onlyGlow, excludeInked
+    brand,
+    mold,
+    minCondition,
+    maxCondition,
+    minPrice,
+    maxPrice,
+    minWeight,
+    maxWeight,
+    speedMin,
+    speedMax,
+    glideMin,
+    glideMax,
+    turnMin,
+    turnMax,
+    fadeMin,
+    fadeMax,
+    includeSold,
+    onlyGlow,
+    excludeInked,
   ]);
 
   // Prefetch blurDataURL
@@ -163,7 +312,9 @@ export default function Home() {
 
     prefetchingRef.current = true;
     (async () => {
-      const entries = await Promise.all(candidates.map(async (src) => [src, await getBlurDataURL(src)]));
+      const entries = await Promise.all(
+        candidates.map(async (src) => [src, await getBlurDataURL(src)])
+      );
       setBlurs((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
       prefetchingRef.current = false;
     })();
@@ -196,10 +347,24 @@ export default function Home() {
     ];
     return [...basics, ...flight].filter(Boolean).length;
   }, [
-    brand, mold, minCondition, maxCondition,
-    minPrice, maxPrice, minWeight, maxWeight,
-    speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax,
-    debouncedSearch, includeSold
+    brand,
+    mold,
+    minCondition,
+    maxCondition,
+    minPrice,
+    maxPrice,
+    minWeight,
+    maxWeight,
+    speedMin,
+    speedMax,
+    glideMin,
+    glideMax,
+    turnMin,
+    turnMax,
+    fadeMin,
+    fadeMax,
+    debouncedSearch,
+    includeSold,
   ]);
 
   function resetFilters() {
@@ -239,7 +404,10 @@ export default function Home() {
 
       <main className={`${poppins.variable} ${sourceSans.variable} pp-wrap`}>
         <h1 className="pageTitle">Parked Plastic — Local Disc Listings</h1>
-        <p className="sub">Browse used discs. Search everything, or expand filters for finer control.</p>
+        <p className="sub">
+          Browse used discs. Search everything, or expand filters for finer
+          control.
+        </p>
 
         {/* Filters */}
         <section className="filters" aria-label="Search and filters">
@@ -261,12 +429,19 @@ export default function Home() {
               </div>
               <div className="bar-actions">
                 {activeFiltersCount > 0 && (
-                  <span className="pp-badge pp-badge--coral" aria-label={`${activeFiltersCount} active filters`}>
+                  <span
+                    className="pp-badge pp-badge--coral"
+                    aria-label={`${activeFiltersCount} active filters`}
+                  >
                     {activeFiltersCount} active
                   </span>
                 )}
                 {activeFiltersCount > 0 && (
-                  <button className="pp-btn pp-btn--secondary" type="button" onClick={resetFilters}>
+                  <button
+                    className="pp-btn pp-btn--secondary"
+                    type="button"
+                    onClick={resetFilters}
+                  >
                     Reset
                   </button>
                 )}
@@ -311,152 +486,91 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="pp-field flight">
-   <label>Condition (Sleepy Scale)</label>
-   <div className="row">
-     <input
-       className="pp-input"
-       type="number" min={1} max={10} step={1} placeholder="Min"
-       value={minCondition}
-       onChange={(e)=>setMinCondition(e.target.value)}
-       onBlur={()=>setMinCondition((v)=> v==="" ? v : String(Math.max(1, Math.min(10, Math.round(Number(v)||0)))))}
-       inputMode="numeric"
-     />
-     <input
-       className="pp-input"
-       type="number" min={1} max={10} step={1} placeholder="Max"
-       value={maxCondition}
-       onChange={(e)=>setMaxCondition(e.target.value)}
-       onBlur={()=>setMaxCondition((v)=> v==="" ? v : String(Math.max(1, Math.min(10, Math.round(Number(v)||0)))))}
-       inputMode="numeric"
-     />
-   </div>
- </div>
+                {/* Sleepy Scale (Condition) */}
+                <DualRange
+                  label="Condition (Sleepy Scale)"
+                  min={1}
+                  max={10}
+                  step={1}
+                  minState={[minCondition, setMinCondition]}
+                  maxState={[maxCondition, setMaxCondition]}
+                  unit="/10"
+                />
+
+                {/* Weight (g) */}
+                <DualRange
+                  label="Weight"
+                  min={100}
+                  max={200}
+                  step={1}
+                  minState={[minWeight, setMinWeight]}
+                  maxState={[maxWeight, setMaxWeight]}
+                  unit=" g"
+                />
+
+                {/* ===== Flight number range sliders ===== */}
+                <DualRange
+                  label="Speed"
+                  min={1}
+                  max={15}
+                  step={0.5}
+                  minState={[speedMin, setSpeedMin]}
+                  maxState={[speedMax, setSpeedMax]}
+                />
+                <DualRange
+                  label="Glide"
+                  min={1}
+                  max={7}
+                  step={0.5}
+                  minState={[glideMin, setGlideMin]}
+                  maxState={[glideMax, setGlideMax]}
+                />
+                <DualRange
+                  label="Turn"
+                  min={-5}
+                  max={1} // NOTE: capped at +1
+                  step={0.5}
+                  minState={[turnMin, setTurnMin]}
+                  maxState={[turnMax, setTurnMax]}
+                />
+                <DualRange
+                  label="Fade"
+                  min={0}
+                  max={6}
+                  step={0.5}
+                  minState={[fadeMin, setFadeMin]}
+                  maxState={[fadeMax, setFadeMax]}
+                />
 
                 <div className="pp-field">
-                  <label htmlFor="minWeight">Min Weight (g)</label>
-                  <input
-                    id="minWeight"
-                    className="pp-input"
-                    type="number"
-                    min={120}
-                    max={200}
-                    placeholder="165"
-                    value={minWeight}
-                    onChange={(e) => setMinWeight(e.target.value)}
-                    inputMode="numeric"
-                  />
-                </div>
-
-                <div className="pp-field">
-                  <label htmlFor="maxWeight">Max Weight (g)</label>
-                  <input
-                    id="maxWeight"
-                    className="pp-input"
-                    type="number"
-                    min={120}
-                    max={200}
-                    placeholder="180"
-                    value={maxWeight}
-                    onChange={(e) => setMaxWeight(e.target.value)}
-                    inputMode="numeric"
-                  />
-                </div>
-
-                <div className="pp-field">
-                  <label htmlFor="minPrice">Min Price (CAD)</label>
-                  <input
-                    id="minPrice"
-                    className="pp-input"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    placeholder="10.00"
-                    value={minPrice}
-                    onChange={(e) => setMinPrice(e.target.value)}
-                    inputMode="decimal"
-                  />
-                </div>
-
-                <div className="pp-field">
-                  <label htmlFor="maxPrice">Max Price (CAD)</label>
-                  <input
-                    id="maxPrice"
-                    className="pp-input"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    placeholder="35.00"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value)}
-                    inputMode="decimal"
-                  />
-                </div>
-
-                {/* ===== Flight number range filters ===== */}
-                <div className="pp-field flight">
-                  <label>Speed</label>
-                  <div className="row">
-                    <input
-                      className="pp-input"
-                      type="number" step="0.5" min={0} max={15} placeholder="Min"
-                      value={speedMin} onChange={(e)=>setSpeedMin(e.target.value)} inputMode="decimal"
-                    />
-                    <input
-                      className="pp-input"
-                      type="number" step="0.5" min={0} max={15} placeholder="Max"
-                      value={speedMax} onChange={(e)=>setSpeedMax(e.target.value)} inputMode="decimal"
-                    />
-                  </div>
-                </div>
-
-                <div className="pp-field flight">
-                  <label>Glide</label>
-                  <div className="row">
-                    <input
-                      className="pp-input"
-                      type="number" step="0.5" min={0} max={7} placeholder="Min"
-                      value={glideMin} onChange={(e)=>setGlideMin(e.target.value)} inputMode="decimal"
-                    />
-                    <input
-                      className="pp-input"
-                      type="number" step="0.5" min={0} max={7} placeholder="Max"
-                      value={glideMax} onChange={(e)=>setGlideMax(e.target.value)} inputMode="decimal"
-                    />
-                  </div>
-                </div>
-
-                <div className="pp-field flight">
-                  <label>Turn</label>
-                  <div className="row">
-                    <input
-                      className="pp-input"
-                      type="number" step="0.5" min={-5} max={5} placeholder="Min"
-                      value={turnMin} onChange={(e)=>setTurnMin(e.target.value)} inputMode="decimal"
-                    />
-                    <input
-                      className="pp-input"
-                      type="number" step="0.5" min={-5} max={5} placeholder="Max"
-                      value={turnMax} onChange={(e)=>setTurnMax(e.target.value)} inputMode="decimal"
-                    />
-                  </div>
-                </div>
-
-                <div className="pp-field flight">
-                  <label>Fade</label>
-                  <div className="row">
-                    <input
-                      className="pp-input"
-                      type="number" step="0.5" min={0} max={5} placeholder="Min"
-                      value={fadeMin} onChange={(e)=>setFadeMin(e.target.value)} inputMode="decimal"
-                    />
-                    <input
-                      className="pp-input"
-                      type="number" step="0.5" min={0} max={5} placeholder="Max"
-                      value={fadeMax} onChange={(e)=>setFadeMax(e.target.value)} inputMode="decimal"
-                    />
-                  </div>
-                </div>
+  <label>Price (CAD)</label>
+  <div className="row">
+    <input
+      id="minPrice"
+      className="pp-input"
+      type="number"
+      min={0}
+      step="0.01"
+      placeholder="Min"
+      value={minPrice}
+      onChange={(e) => setMinPrice(e.target.value)}
+      inputMode="decimal"
+      aria-label="Minimum price"
+    />
+    <input
+      id="maxPrice"
+      className="pp-input"
+      type="number"
+      min={0}
+      step="0.01"
+      placeholder="Max"
+      value={maxPrice}
+      onChange={(e) => setMaxPrice(e.target.value)}
+      inputMode="decimal"
+      aria-label="Maximum price"
+    />
+  </div>
+</div>
 
                 <div className="toggles">
                   <label className="checkbox">
@@ -490,7 +604,11 @@ export default function Home() {
         </section>
 
         <div className="resultbar" aria-live="polite" aria-atomic="true">
-          <div>{loading ? "Loading…" : `${discs.length} result${discs.length === 1 ? "" : "s"}`}</div>
+          <div>
+            {loading
+              ? "Loading…"
+              : `${discs.length} result${discs.length === 1 ? "" : "s"}`}
+          </div>
         </div>
 
         {/* Cards — match Account page look & feel */}
@@ -499,7 +617,9 @@ export default function Home() {
             const src = d.image_urls?.[0];
             const hasImage = !!src;
             const price =
-              d.price != null && Number.isFinite(Number(d.price)) ? CAD.format(Number(d.price)) : null;
+              d.price != null && Number.isFinite(Number(d.price))
+                ? CAD.format(Number(d.price))
+                : null;
 
             return (
               <Link
@@ -524,7 +644,10 @@ export default function Home() {
                       priority={false}
                     />
                   ) : (
-                    <div className="img placeholder" aria-label="No image available" />
+                    <div
+                      className="img placeholder"
+                      aria-label="No image available"
+                    />
                   )}
                   {d.is_sold && <div className="soldBanner">SOLD</div>}
                 </div>
@@ -532,11 +655,14 @@ export default function Home() {
                 <div className="content">
                   <h2 className="cardTitle">{d.title}</h2>
                   {/* Flight numbers compact line */}
-                  {d.speed != null && d.glide != null && d.turn != null && d.fade != null && (
-                    <div className="flightline" aria-label="Flight numbers">
-                      {d.speed} / {d.glide} / {d.turn} / {d.fade}
-                    </div>
-                  )}
+                  {d.speed != null &&
+                    d.glide != null &&
+                    d.turn != null &&
+                    d.fade != null && (
+                      <div className="flightline" aria-label="Flight numbers">
+                        {d.speed} / {d.glide} / {d.turn} / {d.fade}
+                      </div>
+                    )}
                   <div className="meta">
                     {d.brand || "—"}
                     {d.mold ? ` • ${d.mold}` : ""}
@@ -547,7 +673,9 @@ export default function Home() {
                     {d.condition != null && <span>{d.condition}/10</span>}
                     {d.is_inked && <span>Inked</span>}
                   </div>
-                  {price && <div className="price pp-badge pp-badge--teal">{price}</div>}
+                  {price && (
+                    <div className="price pp-badge pp-badge--teal">{price}</div>
+                  )}
                 </div>
               </Link>
             );
@@ -600,13 +728,13 @@ export default function Home() {
           margin-top: 12px;
         }
 
-        /* Flight filter rows */
-        .flight .row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-          margin-top: 6px;
-        }
+        /* Two-input rows (sliders & ranges) */
+.pp-field .row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
 
         .checkbox {
           display: flex;
@@ -729,14 +857,23 @@ export default function Home() {
 
         /* Responsive layout */
         @media (min-width: 480px) {
-          .pageTitle { font-size: 1.8rem; }
-          .filters { padding: 14px; }
+          .pageTitle {
+            font-size: 1.8rem;
+          }
+          .filters {
+            padding: 14px;
+          }
         }
         @media (min-width: 768px) {
-          .pageTitle { font-size: 2rem; margin-bottom: 2px; }
+          .pageTitle {
+            font-size: 2rem;
+            margin-bottom: 2px;
+          }
         }
         @media (min-width: 1200px) {
-          .pageTitle { font-size: 2.2rem; }
+          .pageTitle {
+            font-size: 2.2rem;
+          }
         }
       `}</style>
     </>
