@@ -29,6 +29,45 @@ const CONDITION_OPTIONS = [
   "Used",
   "Beat",
 ];
+
+// --- Brand lists (edit anytime) ---
+const TOP_13 = [
+  "Axiom",
+  "Discmania",
+  "Discraft",
+  "Dynamic Discs",
+  "Gateway",
+  "Infinite Discs",
+  "Innova",
+  "Kastaplast",
+  "Latitude 64",
+  "MVP",
+  "Prodigy",
+  "Streamline",
+  "Westside Discs",
+];
+
+const TOP_30 = [
+  ...TOP_13,
+  "DGA",
+  "Clash Discs",
+  "Thought Space Athletics",
+  "Lone Star Discs",
+  "Mint Discs",
+  "RPM Discs",
+  "Prodiscus",
+  "Divergent Discs",
+  "Disc Golf UK",
+  "Loft Discs",
+  "Viking Discs",
+  "Birdie",
+  "Doombird (team)",
+  "Millennium",
+  "Kastaplast (Old Run)",
+  "Alpha Discs",
+  "EV-7",
+]; // keep unique; add/remove freely
+
 const CAD = new Intl.NumberFormat("en-CA", {
   style: "currency",
   currency: "CAD",
@@ -52,6 +91,8 @@ function toNum(v, fallback) {
 function pct(val, min, max) {
   return ((val - min) / (max - min)) * 100;
 }
+
+
 
 /**
  * DualRange — a two-thumb slider that still supports "unset" (empty string) for either side.
@@ -156,6 +197,74 @@ export default function Home() {
   // Filters
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("");
+  // --- Brand autocomplete state & logic (INSIDE Home) ---
+const [brandOpen, setBrandOpen] = useState(false);
+const [brandHighlight, setBrandHighlight] = useState(-1); // keyboard focus index
+
+const brandSuggestions = useMemo(() => {
+  const q = brand.trim().toLowerCase();
+  if (!q) return [...TOP_13, "Other"];
+
+  const uniq = (arr) => Array.from(new Set(arr));
+
+  const starts = TOP_30.filter((b) => b.toLowerCase().startsWith(q));
+  const contains = TOP_30.filter(
+    (b) => !starts.includes(b) && b.toLowerCase().includes(q)
+  );
+
+  const topStarts = starts.filter((b) => TOP_13.includes(b));
+  const restStarts = starts.filter((b) => !TOP_13.includes(b));
+  const topContains = contains.filter((b) => TOP_13.includes(b));
+  const restContains = contains.filter((b) => !TOP_13.includes(b));
+
+  const results = uniq([
+    ...topStarts,
+    ...restStarts,
+    ...topContains,
+    ...restContains,
+  ]).slice(0, 12);
+
+  return [...results, "Other"];
+}, [brand]);
+
+const onBrandFocus = () => setBrandOpen(true);
+const onBrandBlur = () => {
+  // close after a tick so click can register
+  setTimeout(() => setBrandOpen(false), 80);
+};
+const chooseBrand = (name) => {
+  if (name === "Other") {
+    setBrand("Other");
+  } else {
+    setBrand(name);
+  }
+  setBrandOpen(false);
+  setBrandHighlight(-1);
+};
+const onBrandKeyDown = (e) => {
+  if (!brandOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    setBrandOpen(true);
+    return;
+  }
+  if (!brandOpen) return;
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    setBrandHighlight((i) => Math.min(i + 1, brandSuggestions.length - 1));
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    setBrandHighlight((i) => Math.max(i - 1, 0));
+  } else if (e.key === "Enter") {
+    if (brandHighlight >= 0 && brandHighlight < brandSuggestions.length) {
+      e.preventDefault();
+      chooseBrand(brandSuggestions[brandHighlight]);
+    }
+  } else if (e.key === "Escape") {
+    setBrandOpen(false);
+    setBrandHighlight(-1);
+  }
+};
+
   const [mold, setMold] = useState("");
   const [minCondition, setMinCondition] = useState("");
   const [maxCondition, setMaxCondition] = useState("");
@@ -212,8 +321,25 @@ export default function Home() {
           );
         }
 
-        if (brand.trim()) query = query.ilike("brand", brand.trim());
-        if (mold.trim()) query = query.ilike("mold", mold.trim());
+        const brandClean = brand.trim();
+if (brandClean) {
+  if (brandClean.toLowerCase() === "other") {
+    // “Other” = anything NOT in the TOP_30 list
+    // (keeps null/empty brands, which are also “not in top 30”)
+    query = query.not(
+      "brand",
+      "in",
+      `(${TOP_30.map((b) => `"${b.replace(/"/g, '\\"')}"`).join(",")})`
+    );
+  } else {
+    // Normal brand filter (case-insensitive)
+    query = query.ilike("brand", brandClean);
+  }
+}
+
+if (mold.trim()) {
+  query = query.ilike("mold", mold.trim());
+}
 
         const minC = minCondition !== "" ? Number(minCondition) : null;
         const maxC = maxCondition !== "" ? Number(maxCondition) : null;
@@ -460,18 +586,47 @@ export default function Home() {
             {/* Collapsible filter grid */}
             {showFilters && (
               <div id="filter-grid" className="grid">
-                <div className="pp-field">
-                  <label htmlFor="brand">Brand</label>
-                  <input
-                    id="brand"
-                    className="pp-input"
-                    type="text"
-                    value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    placeholder="Innova, Discraft, MVP…"
-                    autoComplete="off"
-                  />
-                </div>
+                <div className="pp-field pp-autocomplete">
+  <label htmlFor="brand">Brand</label>
+  <input
+    id="brand"
+    className="pp-input"
+    type="text"
+    value={brand}
+    onChange={(e) => { setBrand(e.target.value); setBrandOpen(true); }}
+    onFocus={onBrandFocus}
+    onBlur={onBrandBlur}
+    onKeyDown={onBrandKeyDown}
+    aria-autocomplete="list"
+    aria-expanded={brandOpen ? "true" : "false"}
+    aria-controls="brand-listbox"
+    placeholder="Innova, Discraft, MVP…"
+    autoComplete="off"
+  />
+  {brandOpen && brandSuggestions.length > 0 && (
+    <ul
+      id="brand-listbox"
+      role="listbox"
+      className="pp-suggest"
+      aria-label="Brand suggestions"
+    >
+      {brandSuggestions.map((name, i) => (
+        <li
+          key={name}
+          role="option"
+          aria-selected={i === brandHighlight}
+          className={`pp-suggest-item ${i === brandHighlight ? "is-active" : ""}`}
+          onMouseDown={(e) => e.preventDefault()}  // keep focus
+          onClick={() => chooseBrand(name)}
+          onMouseEnter={() => setBrandHighlight(i)}
+        >
+          {name}
+          {TOP_13.includes(name)}
+        </li>
+      ))}
+    </ul>
+  )}
+</div>
 
                 <div className="pp-field">
                   <label htmlFor="mold">Mold</label>
@@ -875,6 +1030,48 @@ export default function Home() {
             font-size: 2.2rem;
           }
         }
+
+        /* Autocomplete */
+.pp-autocomplete { position: relative; }
+.pp-suggest {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--cloud);
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.08);
+  padding: 6px;
+  max-height: 280px;
+  overflow: auto;
+}
+.pp-suggest-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 14px;
+}
+.pp-suggest-item:hover,
+.pp-suggest-item.is-active {
+  background: #f7fbfa;
+}
+.pp-suggest .pill {
+  font-size: 11px;
+  border: 1px solid var(--cloud);
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--storm);
+  background: #fff;
+}
+
+
       `}</style>
     </>
   );
