@@ -460,7 +460,7 @@ export default function Home() {
                       checked={onlyGlow}
                       onChange={(e) => setOnlyGlow(e.target.checked)}
                     />
-                    Show Only Glow discs
+                    Show only Glow discs
                   </label>
                   <label className="checkbox">
                     <input

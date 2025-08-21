@@ -95,6 +95,37 @@ export default function CreateListing() {
     return img;
   }
 
+  function toHalfStep(n) {
+  return Math.round(n * 2) / 2;
+}
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
+function parseLocaleNumber(v) {
+  // allow pasted “−” and comma decimals
+  const s = String(v).replace("−", "-").replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function adjustTurn(delta) {
+  setTurn((prev) => {
+    const cur = prev === "" ? 0 : parseLocaleNumber(prev) || 0;
+    const next = clamp(toHalfStep(cur + delta), -5, 1);
+    return String(next);
+  });
+}
+
+function sanitizeTurn() {
+  setTurn((prev) => {
+    if (prev === "") return prev;
+    const n = parseLocaleNumber(prev);
+    if (!Number.isFinite(n)) return "";
+    return String(clamp(toHalfStep(n), -5, 1));
+  });
+}
+
+
   async function resizeIfNeeded(
     file,
     maxEdge = MAX_EDGE_PX,
@@ -620,19 +651,42 @@ export default function CreateListing() {
                   />
                 </div>
                 <div className="flightField">
-                  <span className="ffLabel">Turn</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={-5}
-                    max={1}
-                    required
-                    value={turn}
-                    onChange={(e) => setTurn(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="e.g., -1"
-                  />
-                </div>
+  <span className="ffLabel">Turn</span>
+
+  <div className="spin">
+    <button
+      type="button"
+      className="spinBtn"
+      onClick={() => adjustTurn(-0.5)}
+      aria-label="Decrease turn by 0.5"
+    >
+      −0.5
+    </button>
+
+    <input
+      type="number"
+      step="0.5"
+      min={-5}
+      max={1}
+      required
+      value={turn}
+      onChange={(e) => setTurn(e.target.value)}
+      onBlur={sanitizeTurn}
+      inputMode="decimal"
+      placeholder="e.g., -1"
+    />
+
+    <button
+      type="button"
+      className="spinBtn"
+      onClick={() => adjustTurn(0.5)}
+      aria-label="Increase turn by 0.5"
+    >
+      +0.5
+    </button>
+  </div>
+</div>
+
                 <div className="flightField">
                   <span className="ffLabel">Fade</span>
                   <input
@@ -910,6 +964,23 @@ const styles = `
     font-weight: 600; color: var(--storm); font-size: .9rem;
   }
 
+
+  .spin {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.spinBtn {
+  border: 1px solid var(--cloud);
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.spinBtn:active { transform: translateY(1px); }
+
   .actions {
     display: flex; gap: 12px; justify-content: flex-end;
     margin-top: 4px;
@@ -924,6 +995,9 @@ const styles = `
     background: #fff; color: var(--storm); border: 2px solid var(--storm);
     text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
   }
+
+
+
   .btn-ghost:hover { background: var(--storm); color: #fff; }
 
   .checks { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
