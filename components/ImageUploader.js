@@ -166,24 +166,30 @@ export default function ImageUploader({
     bucket,
     userId,
     file,
-    timeoutMs = 60_000,
-    maxRetries = 2,
-    onStatus,
+    timeoutMs = 25_000,      // shorter hard timeout for mobile
+    maxRetries = 3,
+    onProgress,              // (p: 0..1, meta)
   }) {
     const now = new Date();
-    const key = `${userId}/${now.getFullYear()}/${String(
-      now.getMonth() + 1
-    ).padStart(2, "0")}/${String(now.getDate()).padStart(
-      2,
-      "0"
-    )}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+    const key = `${userId}/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
 
-    let attempt = 0;
-    while (true) {
+    let attempt = 1;
+    while (attempt <= maxRetries) {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      let tick = null;
       try {
-        onStatus && onStatus(0.05, "Starting upload");
+        // Heartbeat progress while fetch is in-flight (since supabase-js has no upload progress)
+        if (onProgress) {
+          let p = 0.05; // start just above 60%
+          tick = setInterval(() => {
+            // ease toward 0.90 but never reach 1.00 until we actually finish
+            p = Math.min(0.90, p + 0.02);
+            onProgress(p, { attempt });
+          }, 600);
+          onProgress(0.05, { attempt });
+        }
+
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         const { error } = await supabase.storage
           .from(bucket)
           .upload(key, file, {
@@ -194,15 +200,22 @@ export default function ImageUploader({
           });
         clearTimeout(timer);
         if (error) throw error;
+
         const { data: pub } = supabase.storage.from(bucket).getPublicUrl(key);
+        if (tick) clearInterval(tick);
         return { url: pub?.publicUrl || null, key };
       } catch (err) {
+        if (tick) clearInterval(tick);
         if (attempt >= maxRetries) throw err;
-        const backoff = Math.min(2000 * Math.pow(2, attempt), 6000);
-        await new Promise((r) => setTimeout(r, backoff));
-        attempt++;
+        // brief backoff, then retry
+        await new Promise((r) => setTimeout(r, 800 * attempt));
+        attempt += 1;
+      } finally {
+        // ensure we don't leak an in-flight request across retries
+        try { ctrl.abort(); } catch {}
       }
     }
+    throw new Error("Upload failed after retries");
   }
 
   // ---------- Picking / processing / uploading ----------
@@ -287,19 +300,16 @@ export default function ImageUploader({
           bucket,
           userId,
           file: new File([processed], sanitizeExt(workFile.name)),
-          timeoutMs: 60_000,
-          maxRetries: 2,
-          onStatus: (p) => {
+          onProgress: (p, meta) => {
             setItems((cur) =>
               cur.map((i) =>
                 i.id === itemId
                   ? {
                       ...i,
-                      progress: Math.max(
-                        60,
-                        Math.min(99, Math.round(60 + p * 40))
-                      ),
+                      // map 0..1 into 60..95 while uploading (100 when finished)
+                      progress: Math.max(60, Math.min(95, Math.round(60 + p * 40))),
                       status: "uploading",
+                      attempt: meta?.attempt || 1,
                     }
                   : i
               )
