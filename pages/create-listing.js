@@ -1,14 +1,9 @@
 // pages/create-listing.js
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { supabase } from "@/lib/supabaseClient";
-
-const MAX_FILES = 10;
-const MAX_FILE_MB = 12;
-// Resize settings (tweak as you like)
-const MAX_EDGE_PX = 1600;
-const JPEG_QUALITY = 0.85;
+import ImageUploader from "@/components/ImageUploader";
 
 export default function CreateListing() {
   const router = useRouter();
@@ -16,6 +11,7 @@ export default function CreateListing() {
   // Auth gate
   const [checking, setChecking] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+
   // Flight numbers (REQUIRED)
   const [speed, setSpeed] = useState("");
   const [glide, setGlide] = useState("");
@@ -34,20 +30,13 @@ export default function CreateListing() {
   const [isInked, setIsInked] = useState(false);
   const [isGlow, setIsGlow] = useState(false);
 
-  // Images
-  const [files, setFiles] = useState([]); // normalized, converted & possibly resized
-  const [previews, setPreviews] = useState([]); // objectURL previews
-  const [uploadMsg, setUploadMsg] = useState("");
+  // Images (from new uploader)
+  const [imageItems, setImageItems] = useState([]); // full objects from uploader
+  const imageUrls = imageItems.filter(i => i.status === "done").map(i => i.url);
 
   // UI state
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-
-  // Drag & drop state
-  const [isDragging, setIsDragging] = useState(false);
-
-  // Camera input ref (for Option 2)
-  const cameraInputRef = useRef(null);
 
   // ---------- Auth ----------
   useEffect(() => {
@@ -65,273 +54,28 @@ export default function CreateListing() {
     return () => sub?.subscription?.unsubscribe?.();
   }, []);
 
-  // ---------- Image previews cleanup ----------
-  useEffect(() => {
-    return () => previews.forEach((u) => URL.revokeObjectURL(u));
-  }, [previews]);
-
-  // ---- Helpers: decode + resize (client-side) ----
-  async function fileToImageBitmap(file) {
-    if (typeof createImageBitmap === "function") {
-      try {
-        return await createImageBitmap(file);
-      } catch {
-        // fall through to HTMLImageElement
-      }
-    }
-    const dataUrl = await new Promise((resolve) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.readAsDataURL(file);
-    });
-    const img = await new Promise((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = reject;
-      el.src = dataUrl;
-      el.decoding = "async";
-      el.loading = "eager";
-    });
-    return img;
+  // Number helpers for Turn control
+  function toHalfStep(n) { return Math.round(n * 2) / 2; }
+  function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+  function parseLocaleNumber(v) {
+    const s = String(v).replace("−", "-").replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
   }
-
-  function toHalfStep(n) {
-  return Math.round(n * 2) / 2;
-}
-function clamp(val, min, max) {
-  return Math.max(min, Math.min(max, val));
-}
-function parseLocaleNumber(v) {
-  // allow pasted “−” and comma decimals
-  const s = String(v).replace("−", "-").replace(",", ".");
-  const n = Number(s);
-  return Number.isFinite(n) ? n : NaN;
-}
-
-function adjustTurn(delta) {
-  setTurn((prev) => {
-    const cur = prev === "" ? 0 : parseLocaleNumber(prev) || 0;
-    const next = clamp(toHalfStep(cur + delta), -5, 1);
-    return String(next);
-  });
-}
-
-function sanitizeTurn() {
-  setTurn((prev) => {
-    if (prev === "") return prev;
-    const n = parseLocaleNumber(prev);
-    if (!Number.isFinite(n)) return "";
-    return String(clamp(toHalfStep(n), -5, 1));
-  });
-}
-
-
-  async function resizeIfNeeded(
-    file,
-    maxEdge = MAX_EDGE_PX,
-    quality = JPEG_QUALITY
-  ) {
-    try {
-      const img = await fileToImageBitmap(file);
-      const w = img.width,
-        h = img.height;
-      if (!w || !h) return file;
-
-      const maxCurrent = Math.max(w, h);
-      if (maxCurrent <= maxEdge) return file;
-
-      const scale = maxEdge / maxCurrent;
-      const outW = Math.round(w * scale);
-      const outH = Math.round(h * scale);
-
-      // Use OffscreenCanvas where available
-      if (typeof OffscreenCanvas !== "undefined") {
-        const canvas = new OffscreenCanvas(outW, outH);
-        const ctx = canvas.getContext("2d", { alpha: false });
-        ctx.drawImage(img, 0, 0, outW, outH);
-        const blob = await canvas.convertToBlob({
-          type: "image/jpeg",
-          quality,
-        });
-        const outName = (file.name || "image").replace(/\.[^.]+$/, "") + ".jpg";
-        return new File([blob], outName, { type: "image/jpeg" });
-      } else {
-        const c = document.createElement("canvas");
-        c.width = outW;
-        c.height = outH;
-        const ctx = c.getContext("2d", { alpha: false });
-        ctx.drawImage(img, 0, 0, outW, outH);
-        const blob = await new Promise((res) =>
-          c.toBlob(res, "image/jpeg", quality)
-        );
-        const outName = (file.name || "image").replace(/\.[^.]+$/, "") + ".jpg";
-        return new File([blob], outName, { type: "image/jpeg" });
-      }
-    } catch (err) {
-      console.warn("Resize failed; using original file:", err);
-      return file; // Graceful fallback
-    }
+  function adjustTurn(delta) {
+    setTurn((prev) => {
+      const cur = prev === "" ? 0 : parseLocaleNumber(prev) || 0;
+      const next = clamp(toHalfStep(cur + delta), -5, 1);
+      return String(next);
+    });
   }
-
-  // HEIC/HEIF → JPEG
-  const convertHeicIfNeeded = useCallback(async (file) => {
-    const isHeicType =
-      file.type === "image/heic" ||
-      file.type === "image/heif" ||
-      /\.(heic|heif)$/i.test(file.name || "");
-
-    if (!isHeicType) return file;
-
-    try {
-      const heic2any = (await import("heic2any")).default;
-      const resultBlob = await heic2any({
-        blob: file,
-        toType: "image/jpeg",
-        quality: 0.9,
-      });
-      const outName =
-        (file.name || "image").replace(/\.(heic|heif)$/i, "") + ".jpg";
-      return new File([resultBlob], outName, { type: "image/jpeg" });
-    } catch (err) {
-      console.warn("HEIC conversion failed, using original file:", err);
-      return file; // graceful fallback
-    }
-  }, []);
-
-  // Normalize/guard picked files (input or drop): HEIC→JPEG, then downscale
-  const processPickedFiles = useCallback(
-    async (pickedList) => {
-      setErrorMsg("");
-
-      const picked = Array.from(pickedList || []);
-      if (!picked.length) return;
-
-      // 1) Convert HEIC if needed
-      const converted = await Promise.all(
-        picked.map((f) => convertHeicIfNeeded(f))
-      );
-
-      // 2) Downscale if oversized (sequential for mobile friendliness)
-      const resized = [];
-      for (const f of converted) {
-        const toUse = await resizeIfNeeded(f, MAX_EDGE_PX, JPEG_QUALITY);
-        resized.push(toUse);
-      }
-
-      // 3) Combine with existing selection
-      let combined = [...files, ...resized];
-
-      // ⚠️ Guard: skip any zero-byte files (happens on some camera captures)
-      combined = combined.filter(
-        (f) => f && typeof f.size === "number" && f.size > 0
-      );
-      if (combined.length === 0) {
-        setErrorMsg(
-          "The captured photo looks empty. Try again or pick from your gallery."
-        );
-        return;
-      }
-
-      // 4) Enforce count and size limits
-      if (combined.length > MAX_FILES) {
-        setErrorMsg(
-          `You selected ${combined.length} files. Max is ${MAX_FILES}. Extra files were ignored.`
-        );
-        combined = combined.slice(0, MAX_FILES);
-      }
-      const filtered = combined.filter(
-        (f) => f.size <= MAX_FILE_MB * 1024 * 1024
-      );
-      if (filtered.length < combined.length) {
-        setErrorMsg(`Some files were skipped for exceeding ${MAX_FILE_MB}MB.`);
-      }
-
-      // Reset previous previews
-      previews.forEach((u) => URL.revokeObjectURL(u));
-
-      setFiles(filtered);
-      setPreviews(filtered.map((file) => URL.createObjectURL(file)));
-    },
-    [files, previews, convertHeicIfNeeded]
-  );
-
-  // File input change
-  const handleFileChange = async (e) => {
-    await processPickedFiles(e.target.files);
-    e.target.value = ""; // allow re-picking same files
-  };
-
-  // Drag-and-drop handlers
-  const onDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-  const onDragEnter = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-  const onDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-  const onDrop = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    if (e.dataTransfer?.files?.length)
-      await processPickedFiles(e.dataTransfer.files);
-  };
-
-  async function uploadToBucket(file, userId) {
-    // Some camera captures come through with missing/odd MIME types.
-    // Default to jpeg if we can't tell.
-    const safeType =
-      (file &&
-        file.type &&
-        typeof file.type === "string" &&
-        file.type.trim()) ||
-      "image/jpeg";
-
-    const extGuess = (() => {
-      // Try from filename, fallback from MIME
-      const nameExt = (file.name?.split(".").pop() || "").toLowerCase();
-      if (nameExt) return nameExt;
-      if (safeType.includes("heic")) return "heic";
-      if (safeType.includes("png")) return "png";
-      return "jpg";
-    })();
-
-    const filePath = `${userId}/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${extGuess}`;
-
-    // Add a safety timeout so we never “hang forever”
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 60_000); // 60s
-
-    try {
-      const { error: uploadError } = await supabase.storage
-        .from("listing-images")
-        .upload(filePath, file, {
-          cacheControl: "31536000, immutable",
-          upsert: false,
-          contentType: safeType,
-          signal: ctrl.signal, // Abort if stuck
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data: pub } = supabase.storage
-        .from("listing-images")
-        .getPublicUrl(filePath);
-
-      return pub?.publicUrl || null;
-    } finally {
-      clearTimeout(timeout);
-    }
+  function sanitizeTurn() {
+    setTurn((prev) => {
+      if (prev === "") return prev;
+      const n = parseLocaleNumber(prev);
+      if (!Number.isFinite(n)) return "";
+      return String(clamp(toHalfStep(n), -5, 1));
+    });
   }
 
   async function handleSubmit(e) {
@@ -369,31 +113,22 @@ function sanitizeTurn() {
       return;
     }
 
+    // Parse optionals
+    const weightNum = weight.trim() === "" ? null : Number(weight);
+    const priceNum = price.trim() === "" ? null : Number(price);
+
+    // Sleepy Scale condition (optional)
+    const condNumRaw = conditionScore.trim() === "" ? null : Number(conditionScore);
+    if (condNumRaw !== null) {
+      if (!Number.isFinite(condNumRaw)) {
+        setErrorMsg("Condition must be a number 1–10.");
+        return;
+      }
+    }
+    const condNum = condNumRaw === null ? null : Math.max(1, Math.min(10, Math.round(condNumRaw)));
+
     setLoading(true);
     try {
-      // Upload images (sequential; keeps memory & bandwidth friendly)
-      const image_urls = [];
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        setUploadMsg(`Uploading ${i + 1} of ${files.length}…`);
-        const url = await uploadToBucket(f, currentUser.id);
-        if (url) image_urls.push(url);
-      }
-
-      // Parse optionals
-      const weightNum = weight.trim() === "" ? null : Number(weight);
-      const priceNum = price.trim() === "" ? null : Number(price);
-
-      // Sleepy Scale condition (optional)
-  const condNumRaw = conditionScore.trim() === "" ? null : Number(conditionScore);
-  if (condNumRaw !== null) {
-    if (!Number.isFinite(condNumRaw)) {
-      setErrorMsg("Condition must be a number 1–10.");
-      return;
-    }
-  }
-  const condNum = condNumRaw === null ? null : Math.max(1, Math.min(10, Math.round(condNumRaw)));
-
       const { error } = await supabase.from("discs").insert([
         {
           title: title.trim(),
@@ -404,7 +139,7 @@ function sanitizeTurn() {
           weight: Number.isFinite(weightNum) ? weightNum : null,
           price: Number.isFinite(priceNum) ? priceNum : null,
           description: description.trim() || null,
-          image_urls,
+          image_urls: imageUrls, // from uploader (already uploaded)
           city: null,
           owner: currentUser.id,
           is_sold: false,
@@ -412,7 +147,6 @@ function sanitizeTurn() {
           glide: g,
           turn: t,
           fade: f,
-          // NEW:
           is_inked: isInked,
           is_glow: isGlow,
         },
@@ -425,7 +159,6 @@ function sanitizeTurn() {
       console.error(err);
       setErrorMsg(err?.message || "Failed to create listing.");
     } finally {
-      setUploadMsg("");
       setLoading(false);
     }
   }
@@ -434,7 +167,6 @@ function sanitizeTurn() {
     () => title.trim().length > 0 && !loading,
     [title, loading]
   );
-  // (We also gate in onSubmit; canSubmit keeps the button UX snappy)
 
   // ---------- UI ----------
   if (checking) {
@@ -446,19 +178,9 @@ function sanitizeTurn() {
         </Head>
         <p className="center muted">Checking session…</p>
         <style jsx>{`
-          .wrap {
-            max-width: 960px;
-            margin: 32px auto;
-            padding: 0 16px;
-          }
-          .center {
-            text-align: center;
-            margin-top: 40px;
-          }
-          .muted {
-            color: #3a3a3a;
-            opacity: 0.85;
-          }
+          .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
+          .center { text-align: center; margin-top: 40px; }
+          .muted { color: #3a3a3a; opacity: 0.85; }
         `}</style>
       </main>
     );
@@ -493,8 +215,6 @@ function sanitizeTurn() {
     );
   }
 
-  const openCamera = () => cameraInputRef.current?.click();
-
   return (
     <main className="wrap">
       <Head>
@@ -514,77 +234,27 @@ function sanitizeTurn() {
       {/* Errors / status */}
       <div aria-live="polite" aria-atomic="true" className="statusRegion">
         {errorMsg && <div className="error">{errorMsg}</div>}
-        {uploadMsg && <div className="info">{uploadMsg}</div>}
       </div>
 
       <div className="card">
         <form onSubmit={handleSubmit}>
-          {/* Mobile-first grid; becomes 2-col ≥768px */}
           <div className="grid2">
-            {/* Images — with drag & drop (TOP) */}
+            {/* Images (new uploader) */}
             <div className="field span2">
-              <label htmlFor="images">Images</label>
-              <div
-                className={`uploader ${isDragging ? "dragging" : ""}`}
-                onDragEnter={onDragEnter}
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={onDrop}
-              >
-                {/* Hidden gallery picker */}
-                <input
-                  id="images"
-                  type="file"
-                  accept="image/*,.heic,.heif"
-                  multiple
-                  onChange={handleFileChange}
-                  style={{ display: "none" }}
-                />
-                {/* Hidden camera capture (Option 2) */}
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*,.heic,.heif"
-                  capture="environment"
-                  onChange={handleFileChange}
-                  style={{ display: "none" }}
-                />
-
-                <div className="uploaderCtas">
-                  <label htmlFor="images" className="btn btn-ghost">
-                    Choose from gallery
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={openCamera}
-                  >
-                    Take Photo
-                  </button>
-                </div>
-
-                <p className="uploaderHint">
-                  Drag & drop here too • Up to {MAX_FILES} photos • Each ≤{" "}
-                  {MAX_FILE_MB}MB • 4:3 ratio looks best • HEIC auto‑converted •
-                  Large images auto‑downsized
-                </p>
-              </div>
-
-              {previews.length > 0 && (
-                <>
-                  <div className="previews">
-                    {previews.map((src) => (
-                      <div className="thumb" key={src}>
-                        <img src={src} alt="Selected preview" />
-                      </div>
-                    ))}
-                  </div>
-                  <p className="hintRow">
-                    Tip: Use good light and a clean background. Slight angle
-                    helps show dome.
-                  </p>
-                </>
-              )}
+              <label>Images</label>
+              <ImageUploader
+                supabase={supabase}
+                userId={currentUser.id}
+                bucket="listing-images"
+                maxFiles={10}
+                maxFileMB={12}
+                maxEdgePx={1600}
+                jpegQuality={0.85}
+                onChange={setImageItems}
+              />
+              <p className="hintRow">
+                Tip: Use good light and a clean background. Suggested angles: Front, back, side profile.
+              </p>
             </div>
 
             {/* Title */}
@@ -661,42 +331,38 @@ function sanitizeTurn() {
                   />
                 </div>
                 <div className="flightField">
-  <span className="ffLabel">Turn</span>
-
-  <div className="spin">
-    <button
-      type="button"
-      className="spinBtn"
-      onClick={() => adjustTurn(-0.5)}
-      aria-label="Decrease turn by 0.5"
-    >
-      −0.5
-    </button>
-
-    <input
-      type="number"
-      step="0.5"
-      min={-5}
-      max={1}
-      required
-      value={turn}
-      onChange={(e) => setTurn(e.target.value)}
-      onBlur={sanitizeTurn}
-      inputMode="decimal"
-      placeholder="e.g., -1"
-    />
-
-    <button
-      type="button"
-      className="spinBtn"
-      onClick={() => adjustTurn(0.5)}
-      aria-label="Increase turn by 0.5"
-    >
-      +0.5
-    </button>
-  </div>
-</div>
-
+                  <span className="ffLabel">Turn</span>
+                  <div className="spin">
+                    <button
+                      type="button"
+                      className="spinBtn"
+                      onClick={() => adjustTurn(-0.5)}
+                      aria-label="Decrease turn by 0.5"
+                    >
+                      −0.5
+                    </button>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min={-5}
+                      max={1}
+                      required
+                      value={turn}
+                      onChange={(e) => setTurn(e.target.value)}
+                      onBlur={sanitizeTurn}
+                      inputMode="decimal"
+                      placeholder="e.g., -1"
+                    />
+                    <button
+                      type="button"
+                      className="spinBtn"
+                      onClick={() => adjustTurn(0.5)}
+                      aria-label="Increase turn by 0.5"
+                    >
+                      +0.5
+                    </button>
+                  </div>
+                </div>
                 <div className="flightField">
                   <span className="ffLabel">Fade</span>
                   <input
@@ -712,9 +378,7 @@ function sanitizeTurn() {
                   />
                 </div>
               </div>
-              <p className="hintRow">
-                Use 0.5 increments. Example format: 12 / 5 / -1 / 3
-              </p>
+              <p className="hintRow">Use 0.5 increments. Example format: 12 / 5 / -1 / 3</p>
             </div>
 
             {/* Plastic | Condition */}
@@ -730,31 +394,34 @@ function sanitizeTurn() {
               />
             </div>
             <div className="field">
-  <label htmlFor="condition">Condition*</label>
-  <input
-    id="condition"
-    type="number"
-    min={1}
-    max={10}
-    step={1}
-    inputMode="numeric"
-    placeholder="e.g., 8"
-    required
-    value={conditionScore}
-    onChange={(e) => setConditionScore(e.target.value)}
-    onBlur={() => {
-      setConditionScore((prev) => {
-        if (prev === "") return prev;
-        const n = Number(prev);
-        if (!Number.isFinite(n)) return "";
-        // snap to an integer in [1,10]
-        return String(Math.max(1, Math.min(10, Math.round(n))));
-      });
-    }}
-  />
-  <p className="hintRow">Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new</p>
-  <p className="hintRow"><a href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">Learn more about Sleepy Scale here</a></p>
-</div>
+              <label htmlFor="condition">Condition*</label>
+              <input
+                id="condition"
+                type="number"
+                min={1}
+                max={10}
+                step={1}
+                inputMode="numeric"
+                placeholder="e.g., 8"
+                required
+                value={conditionScore}
+                onChange={(e) => setConditionScore(e.target.value)}
+                onBlur={() => {
+                  setConditionScore((prev) => {
+                    if (prev === "") return prev;
+                    const n = Number(prev);
+                    if (!Number.isFinite(n)) return "";
+                    return String(Math.max(1, Math.min(10, Math.round(n))));
+                  });
+                }}
+              />
+              <p className="hintRow">Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new</p>
+              <p className="hintRow">
+                <a target="_blank" href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">
+                  Learn more about Sleepy Scale here
+                </a>
+              </p>
+            </div>
 
             {/* Weight | Price */}
             <div className="field">
@@ -848,191 +515,42 @@ function sanitizeTurn() {
 /* ---- Styled-JSX: mobile-first, brand tokens ---- */
 const styles = `
   :root {
-    --storm: #141B4D;         /* Primary Dark */
-    --teal: #279989;          /* Primary Accent */
-    --teal-dark: #1E7A6F;
-    --sea: #F8F7EC;           /* Background */
-    --wave: #D6D2C4;          /* Secondary BG */
-    --char: #3A3A3A;          /* Neutral Text */
-    --cloud: #E9E9E9;         /* Borders */
-    --tint: #ECF6F4;          /* Accent Tint */
-    --coral: #E86A5E;         /* Attention */
+    --storm: #141B4D; --teal: #279989; --teal-dark: #1E7A6F;
+    --sea: #F8F7EC; --wave: #D6D2C4; --char: #3A3A3A; --cloud: #E9E9E9;
+    --tint: #ECF6F4; --coral: #E86A5E;
   }
-
   .wrap { max-width: 960px; margin: 24px auto 80px; padding: 0 12px; background: var(--sea); }
-
-  .titleRow {
-    display: flex; align-items: baseline; justify-content: space-between;
-    gap: 12px; margin-bottom: 12px;
-  }
-  h1 {
-    font-family: 'Poppins', sans-serif; font-weight: 600;
-    color: var(--storm); letter-spacing: .5px; margin: 0; font-size: 1.6rem;
-  }
+  .titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--storm); letter-spacing: .5px; margin: 0; font-size: 1.6rem; }
   .subtle { color: var(--char); opacity: .85; margin: 0; }
-
   .statusRegion { min-height: 22px; margin-bottom: 8px; }
-  .error, .info {
-    border-radius: 10px; padding: 10px 12px; font-size: .95rem; margin: 8px 0;
-  }
+  .error, .info { border-radius: 10px; padding: 10px 12px; font-size: .95rem; margin: 8px 0; }
   .error { background: #fff5f4; border: 1px solid #ffd9d5; color: #8c2f28; }
   .info { background: #f4fff9; border: 1px solid #d1f5e5; color: #1a6a58; }
-
-  .panel, .card {
-    background: #fff;
-    border: 1px solid var(--cloud);
-    border-radius: 14px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-    padding: 18px;
-  }
-
-  /* Mobile-first: 1 column; switch to 2 columns ≥768px */
-  .grid2 {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 14px 14px;
-  }
+  .panel, .card { background: #fff; border: 1px solid var(--cloud); border-radius: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 18px; }
+  .grid2 { display: grid; grid-template-columns: 1fr; gap: 14px 14px; }
   .span2 { grid-column: 1 / -1; }
-
-  .field label {
-    display: block;
-    font-family: 'Poppins', sans-serif;
-    font-weight: 600;
-    color: var(--storm);
-    font-size: .95rem;
-    margin-bottom: 6px;
-  }
+  .field label { display: block; font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--storm); font-size: .95rem; margin-bottom: 6px; }
   .hint { font-weight: 500; color: #666; font-size: .8rem; margin-left: 6px; }
-
-  /* Style ALL non-file inputs + textarea */
-  .field input:not([type="file"]),
-  .field textarea {
-    width: 100%;
-    box-sizing: border-box;
-    background: #fff;
-    border: 1px solid var(--cloud);
-    border-radius: 10px;
-    padding: 12px 14px;
-    font-size: 15px;
-    color: var(--char);
-    outline: none;
-    transition: border-color .15s, box-shadow .15s;
-  }
+  .field input:not([type="file"]), .field textarea { width: 100%; box-sizing: border-box; background: #fff; border: 1px solid var(--cloud); border-radius: 10px; padding: 12px 14px; font-size: 15px; color: var(--char); outline: none; transition: border-color .15s, box-shadow .15s; }
   .field textarea { resize: vertical; min-height: 120px; }
-
-  /* Focus rings for the same set */
-  .field input:not([type="file"]):focus,
-  .field textarea:focus {
-    border-color: var(--teal);
-    box-shadow: 0 0 0 4px var(--tint);
-  }
-
-  .uploader {
-    border: 2px dashed var(--cloud);
-    border-radius: 10px;
-    padding: 14px;
-    background: #fff;
-    transition: border-color .15s, box-shadow .15s, background .15s;
-    text-align: center;
-  }
-  .uploader.dragging {
-    border-color: var(--teal);
-    box-shadow: 0 0 0 4px var(--tint);
-    background: #fff;
-  }
-  .uploaderHint { font-size: .85rem; color: #666; margin: 10px 0 0; }
-
-  .uploaderCtas {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-  @media (max-width: 480px) {
-    .uploaderCtas { flex-direction: column; align-items: stretch; }
-    .uploaderCtas .btn { width: 100%; }
-  }
-
-  .previews {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 10px;
-    margin-top: 12px;
-  }
-  .thumb {
-    position: relative;
-    border-radius: 10px;
-    overflow: hidden;
-    background: var(--cloud);
-    border: 1px solid var(--cloud);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-  }
-  .thumb img {
-    width: 100%;
-    aspect-ratio: 4/3;
-    object-fit: cover;
-    display: block;
-  }
+  .field input:not([type="file"]):focus, .field textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 4px var(--tint); }
   .hintRow { color: #666; font-size: .85rem; margin-top: 6px; }
-
-  /* Flight numbers grid */
-  .flightGrid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-  }
-  @media (min-width: 768px) {
-    .flightGrid { grid-template-columns: repeat(4, 1fr); }
-  }
+  .flightGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  @media (min-width: 768px) { .flightGrid { grid-template-columns: repeat(4, 1fr); } }
   .flightField { display: grid; gap: 6px; }
-  .ffLabel {
-    font-weight: 600; color: var(--storm); font-size: .9rem;
-  }
-
-
-  .spin {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 8px;
-  align-items: center;
-}
-.spinBtn {
-  border: 1px solid var(--cloud);
-  background: #fff;
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.spinBtn:active { transform: translateY(1px); }
-
-  .actions {
-    display: flex; gap: 12px; justify-content: flex-end;
-    margin-top: 4px;
-  }
-  .btn {
-    border: none; border-radius: 10px; padding: 12px 16px;
-    font-weight: 700; cursor: pointer; font-size: 14px;
-  }
+  .ffLabel { font-weight: 600; color: var(--storm); font-size: .9rem; }
+  .spin { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+  .spinBtn { border: 1px solid var(--cloud); background: #fff; border-radius: 8px; padding: 8px 10px; font-weight: 700; cursor: pointer; }
+  .spinBtn:active { transform: translateY(1px); }
+  .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 4px; }
+  .btn { border: none; border-radius: 10px; padding: 12px 16px; font-weight: 700; cursor: pointer; font-size: 14px; }
   .btn-primary { background: var(--teal); color: #fff; }
   .btn-primary:hover { background: var(--teal-dark); }
-  .btn-ghost {
-    background: #fff; color: var(--storm); border: 2px solid var(--storm);
-    text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
-  }
-
-
-
+  .btn-ghost { background: #fff; color: var(--storm); border: 2px solid var(--storm); text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
   .btn-ghost:hover { background: var(--storm); color: #fff; }
-
   .checks { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
   .check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--storm); }
   .check input { transform: translateY(1px); }
-
-  /* Desktop tweaks */
-  @media (min-width: 768px) {
-    h1 { font-size: 2rem; }
-    .wrap { margin: 32px auto 80px; padding: 0 16px; }
-    .grid2 { grid-template-columns: 1fr 1fr; gap: 16px 16px; }
-  }
+  @media (min-width: 768px) { h1 { font-size: 2rem; } .wrap { margin: 32px auto 80px; padding: 0 16px; } .grid2 { grid-template-columns: 1fr 1fr; gap: 16px 16px; } }
 `;
