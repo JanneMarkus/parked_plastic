@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       .join("\n");
 
     await resend.emails.send({
-      from: "Parked Plastic <team@parkedplastic.com>", // change to your verified domain/sender
+      from: "team@parkedplastic.com", // change to your verified domain/sender
       to: "janneo011@gmail.com",
       subject,
       text: lines,
