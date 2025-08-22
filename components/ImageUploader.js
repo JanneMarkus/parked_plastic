@@ -35,7 +35,7 @@ export default function ImageUploader({
   const cameraInputRef = useRef(null);
 
   const [items, setItems] = useState(() =>
-    (initialItems || []).map((it, idx) => ({
+    initialItems.map((it, idx) => ({
       id: `init-${idx}`,
       name: it.key || `image-${idx}.jpg`,
       size: 0,
@@ -65,59 +65,6 @@ export default function ImageUploader({
   const [editorBitmap, setEditorBitmap] = useState(null); // decoded for live preview
   const previewCanvasRef = useRef(null);
 
-  // ---------- Helpers ----------
-  const humanMB = (bytes) => (bytes / (1024 * 1024)).toFixed(1) + " MB";
-  const announce = (s) => setLiveMsg(s);
-
-  const recomputeOverall = (arr) => {
-    const list = arr || items;
-    const n = list.length || 1;
-    const sum = list.reduce(
-      (acc, it) => acc + (it.progress || (it.status === "done" ? 100 : 0)),
-      0
-    );
-    return { pct: Math.round(sum / n), txt: "" };
-  };
-
-  // --- Robust sniffing + safe naming for camera captures ---
-  async function readHeader(file, n = 24) {
-    const buf = await file.slice(0, n).arrayBuffer();
-    return new Uint8Array(buf);
-  }
-  function u8str(u8) {
-    return Array.from(u8)
-      .map((b) => String.fromCharCode(b))
-      .join("");
-  }
-  function sniffKind(u8) {
-    if (u8[0] === 0xff && u8[1] === 0xd8 && u8[2] === 0xff) return "jpeg"; // JPEG
-    if (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47)
-      return "png"; // PNG
-    const riff =
-      u8str(u8.slice(0, 4)) === "RIFF" && u8str(u8.slice(8, 12)) === "WEBP";
-    if (riff) return "webp";
-    if (u8.length >= 12 && u8str(u8.slice(4, 8)) === "ftyp") {
-      const brand = u8str(u8.slice(8, 12)).toLowerCase();
-      if (/(heic|heif|mif1|hevc|heix|avif|avis)/.test(brand))
-        return brand.includes("avif") || brand.includes("avis")
-          ? "avif"
-          : "heic";
-    }
-    return "unknown";
-  }
-  function safeBaseName(name) {
-    const base = (name || "camera").replace(/\.[^.]+$/, "") || "camera";
-    return base
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[^\w.-]+/g, "-")
-      .replace(/-+/g, "-")
-      .slice(0, 40) || "camera";
-  }
-  function ensureJpegName(name) {
-    return `${safeBaseName(name)}.jpg`;
-  }
-
   // ---------- Inline Worker for final processing ----------
   const workerRef = useRef(null);
   useEffect(() => {
@@ -125,13 +72,7 @@ export default function ImageUploader({
       const { file, opts } = e.data;
       try {
         const arrBuf = await file.arrayBuffer();
-        let bitmap;
-        try {
-          // Honor EXIF orientation on capable engines (Chromium, etc.)
-          bitmap = await createImageBitmap(new Blob([arrBuf]), { imageOrientation: "from-image" });
-        } catch (_) {
-          bitmap = await createImageBitmap(new Blob([arrBuf]));
-        }
+        const bitmap = await createImageBitmap(new Blob([arrBuf]));
         let { width: w, height: h } = bitmap;
 
         const rotate = (opts.rotate || 0) % 360;
@@ -147,24 +88,27 @@ export default function ImageUploader({
         let sx = Math.max(0, Math.min(cx - Math.floor(cropW/2), w - cropW));
         let sy = Math.max(0, Math.min(cy - Math.floor(cropH/2), h - cropH));
 
+        // target dimensions (respect maxEdge)
         const curMax = Math.max(
           rotate % 180 !== 0 ? cropH : cropW,
           rotate % 180 !== 0 ? cropW : cropH
         );
         const maxEdge = opts.maxEdgePx || 1600;
-        const scaleEdge = curMax > maxEdge ? maxEdge / curMax : 1;
-        const tw = Math.max(1, Math.round((rotate % 180 !== 0 ? cropH : cropW) * scaleEdge));
-        const th = Math.max(1, Math.round((rotate % 180 !== 0 ? cropW : cropH) * scaleEdge));
+        const scale = curMax > maxEdge ? maxEdge / curMax : 1;
+        const tw = Math.max(1, Math.round((rotate % 180 !== 0 ? cropH : cropW) * scale));
+        const th = Math.max(1, Math.round((rotate % 180 !== 0 ? cropW : cropH) * scale));
 
+        // First offscreen: crop region
         const off1 = new OffscreenCanvas(cropW, cropH);
         const o1 = off1.getContext('2d', { alpha: false });
         o1.drawImage(bitmap, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
 
+        // Second offscreen: rotate + object-fit: cover to tw x th
         const off2 = new OffscreenCanvas(tw, th);
         const o2 = off2.getContext('2d', { alpha: false });
         o2.translate(tw/2, th/2);
         o2.rotate(rotate * Math.PI/180);
-        // object-fit: cover into tw x th
+
         const srcW = off1.width, srcH = off1.height;
         const rotW = (rotate % 180 === 0) ? srcW : srcH;
         const rotH = (rotate % 180 === 0) ? srcH : srcW;
@@ -186,6 +130,21 @@ export default function ImageUploader({
     return () => worker.terminate();
   }, []);
 
+  // Helpers
+  const humanMB = (bytes) => (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  const announce = (s) => setLiveMsg(s);
+  const ensureJpegName = (name) => (name ? name.replace(/\.[^.]+$/, "") : "image") + ".jpg";
+
+  const recomputeOverall = (arr) => {
+    const list = arr || items;
+    const n = list.length || 1;
+    const sum = list.reduce(
+      (acc, it) => acc + (it.progress || (it.status === "done" ? 100 : 0)),
+      0
+    );
+    return { pct: Math.round(sum / n), txt: "" };
+  };
+
   async function processInWorker(file, opts) {
     const worker = workerRef.current;
     if (!worker) return file;
@@ -201,31 +160,28 @@ export default function ImageUploader({
     });
   }
 
-  // ---------- Upload with retries & mobile-safe timeout ----------
+  // ---- Upload with fallback to signed upload URL (mobile-friendly) ----
   async function uploadWithRetries({
     supabase,
     bucket,
     userId,
     file,
-    timeoutMs = 25_000, // short, mobile-friendly
+    timeoutMs = 30000, // slightly higher to avoid false timeouts on slower devices
     maxRetries = 3,
     onProgress, // (p: 0..1, meta)
   }) {
-    // Base path; append -aN to avoid key collisions between retries
     const now = new Date();
     const base = `${userId}/${now.getFullYear()}/${String(
       now.getMonth() + 1
-    ).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${Date.now()}-${Math.random()
+    ).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${Date.now()}-${Math
+      .random()
       .toString(36)
       .slice(2)}`;
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const withTimeout = (p, ms) =>
       new Promise((resolve, reject) => {
-        const id = setTimeout(
-          () => reject(new Error("Upload timed out")),
-          ms
-        );
+        const id = setTimeout(() => reject(new Error("Upload timed out")), ms);
         p.then((v) => {
           clearTimeout(id);
           resolve(v);
@@ -243,14 +199,13 @@ export default function ImageUploader({
           let p = 0.05;
           onProgress(p, { attempt });
           tick = setInterval(() => {
-            // Glide toward 90% to show liveness without faking completion
             p = Math.min(0.9, p + 0.02);
             onProgress(p, { attempt });
           }, 600);
         }
 
-        // Race the supabase promise against a timeout so we never hang indefinitely
-        const { error } = await withTimeout(
+        // Primary path
+        const primary = await withTimeout(
           supabase.storage.from(bucket).upload(key, file, {
             upsert: false,
             cacheControl: "31536000, immutable",
@@ -258,15 +213,35 @@ export default function ImageUploader({
           }),
           timeoutMs
         );
-        if (error) throw error;
+        if (primary?.error) throw primary.error;
 
         const { data: pub } = supabase.storage.from(bucket).getPublicUrl(key);
         if (tick) clearInterval(tick);
         return { url: pub?.publicUrl || null, key };
       } catch (err) {
-        if (tick) clearInterval(tick);
-        if (attempt === maxRetries) throw err;
-        await sleep(800 * attempt); // backoff
+        // Fallback path: signed URL PUT
+        try {
+          const key2 = `${base}-a${attempt}-signed.jpg`;
+          const mk = await supabase.storage.from(bucket).createSignedUploadUrl(key2);
+          if (mk?.error) throw mk.error;
+
+          const up = await supabase.storage
+            .from(bucket)
+            .uploadToSignedUrl(key2, mk.data.token, file, {
+              contentType: "image/jpeg",
+              upsert: false,
+            });
+          if (up?.error) throw up.error;
+
+          const { data: pub } = supabase.storage.from(bucket).getPublicUrl(key2);
+          return { url: pub?.publicUrl || null, key: key2 };
+        } catch (fallbackErr) {
+          if (attempt >= maxRetries) throw fallbackErr || err;
+          if (tick) clearInterval(tick);
+          await sleep(800 * attempt);
+        } finally {
+          if (tick) clearInterval(tick);
+        }
       }
     }
     throw new Error("Upload failed after retries");
@@ -274,8 +249,11 @@ export default function ImageUploader({
 
   // ---------- Picking / processing / uploading ----------
   const handlePick = async (list) => {
-    const picked = Array.from(list || []);
+    let picked = Array.from(list || []);
     if (!picked.length) return;
+
+    // Guardrails: ignore zero-byte and video/*
+    picked = picked.filter((f) => f && f.size > 0 && !/^video\//i.test(f.type || ""));
 
     const existing = items.filter((i) => i.status !== "removed");
     const room = Math.max(0, maxFiles - existing.length);
@@ -283,100 +261,7 @@ export default function ImageUploader({
       announce(`You can upload up to ${maxFiles} photos.`);
       return;
     }
-
-    // Filter out 0-byte and accidental videos from camera UIs
-    const filtered = picked.filter(
-      (f) =>
-        f &&
-        f.size > 0 &&
-        !((f.type && f.type.startsWith("video/")) ||
-          /\.(mp4|mov|3gp)$/i.test(f.name || ""))
-    );
-    if (!filtered.length) {
-      announce("No valid photos were selected.");
-      return;
-    }
-
-    // Normalize mobile captures: sniff & convert HEIC/AVIF/unknowns to JPEG, ensure .jpg name
-    const normalized = [];
-    for (const raw of filtered) {
-      try {
-        const header = await readHeader(raw);
-        const kind = sniffKind(header) || (raw.type || "").toLowerCase();
-        let work = raw;
-
-        // HEIC/HEIF → JPEG (best-effort via heic2any)
-        if (
-          kind === "heic" ||
-          /heic|heif/i.test(raw.type) ||
-          /\.(heic|heif)$/i.test(raw.name || "")
-        ) {
-          try {
-            const heic2any = (await import("heic2any")).default;
-            const out = await heic2any({
-              blob: raw,
-              toType: "image/jpeg",
-              quality: 0.94,
-            });
-            work = new File([out], ensureJpegName(raw.name), {
-              type: "image/jpeg",
-              lastModified: Date.now(),
-            });
-          } catch (e) {
-            console.warn("heic2any failed; will let the worker re-encode", e);
-          }
-        }
-        // AVIF → JPEG via canvas (broadly supported)
-        else if (
-          kind === "avif" ||
-          /avif/i.test(raw.type) ||
-          /\.(avif)$/i.test(raw.name || "")
-        ) {
-          try {
-            const bmp = await createImageBitmap(raw);
-            const w = bmp.width,
-              h = bmp.height;
-            const c =
-              typeof OffscreenCanvas !== "undefined"
-                ? new OffscreenCanvas(w, h)
-                : (() => {
-                    const el = document.createElement("canvas");
-                    el.width = w;
-                    el.height = h;
-                    return el;
-                  })();
-            const ctx = c.getContext("2d", { alpha: false });
-            ctx.drawImage(bmp, 0, 0);
-            const out =
-              typeof c.convertToBlob === "function"
-                ? await c.convertToBlob({ type: "image/jpeg", quality: 0.94 })
-                : await new Promise((res) =>
-                    c.toBlob(res, "image/jpeg", 0.94)
-                  );
-            work = new File([out], ensureJpegName(raw.name), {
-              type: "image/jpeg",
-              lastModified: Date.now(),
-            });
-          } catch (e) {
-            console.warn("AVIF→JPEG via canvas failed; worker will re-encode", e);
-          }
-        }
-
-        // Ensure the filename ends with .jpg for storage rules and content-type
-        if (!/\.jpe?g$/i.test(work.name || "")) {
-          work = new File([work], ensureJpegName(work.name), {
-            type: work.type || "image/jpeg",
-            lastModified: Date.now(),
-          });
-        }
-        normalized.push(work);
-      } catch (e) {
-        console.warn("Normalization skipped:", e);
-        normalized.push(raw);
-      }
-    }
-
-    const toUse = normalized.slice(0, room);
+    const toUse = picked.slice(0, room);
 
     const newItems = toUse.map((file) => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -398,9 +283,35 @@ export default function ImageUploader({
     for (let idx = 0; idx < newItems.length; idx++) {
       const itemId = newItems[idx].id;
       try {
+        // HEIC → JPEG (best-effort)
         let workFile = newItems[idx].rawFile;
+        const isHeic =
+          /heic|heif/i.test(workFile.type) ||
+          /\.(heic|heif)$/i.test(workFile.name || "");
+        if (isHeic) {
+          setItems((cur) =>
+            cur.map((i) =>
+              i.id === itemId ? { ...i, status: "processing", progress: 10 } : i
+            )
+          );
+          try {
+            const heic2any = (await import("heic2any")).default;
+            const out = await heic2any({
+              blob: workFile,
+              toType: "image/jpeg",
+              quality: 0.92,
+            });
+            workFile = new File(
+              [out],
+              (workFile.name || "image").replace(/\.(heic|heif)$/i, "") + ".jpg",
+              { type: "image/jpeg" }
+            );
+          } catch (err) {
+            console.warn("HEIC conversion failed", err);
+          }
+        }
 
-        // In case the camera gave us an image/* with non-JPEG bits, the worker will re-encode → JPEG
+        // Crop/resize in Worker (default framing; user can adjust later)
         const processed = await processInWorker(workFile, {
           rotate: 0,
           zoom: 1,
@@ -408,6 +319,14 @@ export default function ImageUploader({
           y: 0.5,
           maxEdgePx,
           jpegQuality,
+        });
+
+        // ---- IMPORTANT: materialize the blob to avoid streaming-hang on Android/Brave
+        const processedAB = await processed.arrayBuffer();
+        const stableBlob = new Blob([processedAB], { type: "image/jpeg" });
+        const uploadFile = new File([stableBlob], ensureJpegName(workFile.name), {
+          type: "image/jpeg",
+          lastModified: Date.now(),
         });
 
         setItems((cur) =>
@@ -420,21 +339,14 @@ export default function ImageUploader({
           supabase,
           bucket,
           userId,
-          file: new File([processed], ensureJpegName(workFile.name), {
-            type: "image/jpeg",
-            lastModified: Date.now(),
-          }),
+          file: uploadFile,
           onProgress: (p, meta) => {
             setItems((cur) =>
               cur.map((i) =>
                 i.id === itemId
                   ? {
                       ...i,
-                      // map 0..1 into 60..95 while uploading (100 when finished)
-                      progress: Math.max(
-                        60,
-                        Math.min(95, Math.round(60 + p * 40))
-                      ),
+                      progress: Math.max(60, Math.min(95, Math.round(60 + p * 40))),
                       status: "uploading",
                       attempt: meta?.attempt || 1,
                     }
@@ -466,11 +378,7 @@ export default function ImageUploader({
               ? {
                   ...i,
                   status: "error",
-                  error: /timed out/i.test(String(err))
-                    ? "Upload timed out. Check your connection and try again."
-                    : /decode|processing|bitmap|canvas/i.test(String(err))
-                    ? "That photo format isn’t supported on this device. Try another or set your camera to JPEG."
-                    : err?.message || "Upload failed. Please try again.",
+                  error: err?.message || "Upload failed",
                   progress: 0,
                 }
               : i
@@ -478,7 +386,7 @@ export default function ImageUploader({
         );
         announce("Upload failed");
       } finally {
-        setOverall(recomputeOverall(items));
+        setOverall(recomputeOverall());
       }
     }
   };
@@ -538,9 +446,7 @@ export default function ImageUploader({
 
       setItems((cur) =>
         cur.map((x, i) =>
-          i === idx
-            ? { ...x, status: "processing", progress: 10, error: null }
-            : x
+          i === idx ? { ...x, status: "processing", progress: 10, error: null } : x
         )
       );
 
@@ -550,20 +456,23 @@ export default function ImageUploader({
         jpegQuality,
       });
 
+      // ---- Materialize before upload (same reason as above)
+      const processedAB = await blob.arrayBuffer();
+      const stableBlob = new Blob([processedAB], { type: "image/jpeg" });
+      const uploadFile = new File([stableBlob], ensureJpegName(it.name), {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      });
+
       setItems((cur) =>
-        cur.map((x, i) =>
-          i === idx ? { ...x, status: "uploading", progress: 60 } : x
-        )
+        cur.map((x, i) => (i === idx ? { ...x, status: "uploading", progress: 60 } : x))
       );
 
       const { url, key } = await uploadWithRetries({
         supabase,
         bucket,
         userId,
-        file: new File([blob], ensureJpegName(it.name), {
-          type: "image/jpeg",
-          lastModified: Date.now(),
-        }),
+        file: uploadFile,
       });
 
       setItems((cur) =>
@@ -584,9 +493,7 @@ export default function ImageUploader({
     } catch (err) {
       setItems((cur) =>
         cur.map((x, i) =>
-          i === idx
-            ? { ...x, status: "error", error: err?.message || "Edit failed" }
-            : x
+          i === idx ? { ...x, status: "error", error: err?.message || "Edit failed" } : x
         )
       );
     } finally {
@@ -596,6 +503,7 @@ export default function ImageUploader({
 
   // ---------- Remove / Cancel ----------
   const removeItem = (id) => setItems((cur) => cur.filter((i) => i.id !== id));
+
   const cancelAll = () => {
     setItems((cur) => cur.filter((i) => i.status === "done"));
     announce("Canceled pending uploads");
@@ -711,7 +619,7 @@ export default function ImageUploader({
           type="file"
           accept="image/*,.heic,.heif"
           capture="environment"
-          /* single capture for Android stability */
+          multiple
           hidden
           onChange={(e) => {
             handlePick(e.target.files);
@@ -795,12 +703,7 @@ export default function ImageUploader({
         <dialog open className="pp-modal" aria-label="Edit photo">
           <div className="pp-modal-inner">
             <div className="canvasWrap">
-              <canvas
-                ref={previewCanvasRef}
-                width={800}
-                height={600}
-                aria-label="Live preview"
-              />
+              <canvas ref={previewCanvasRef} width={800} height={600} aria-label="Live preview" />
             </div>
             <div className="controls">
               <label>
@@ -1001,7 +904,7 @@ export default function ImageUploader({
           border-radius: 14px;
           padding: 0;
           max-width: min(92vw, 560px);
-          background: #F8F7EC;
+          background: #f8f7ec;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
         }
         .pp-modal-inner {
