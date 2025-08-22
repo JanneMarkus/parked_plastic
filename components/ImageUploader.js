@@ -622,6 +622,10 @@ export default function ImageUploader({
               ) : null}
               <ProgressRing value={it.progress || 0} />
             </div>
+            {typeof it.attempt === "number" && it.status === "uploading" && (
+  <div className="sub">Uploading… (attempt {it.attempt}/3)</div>
+)}
+
             <div className="meta">
               <div className="name" title={it.name}>
                 {it.name}
@@ -701,7 +705,7 @@ export default function ImageUploader({
                 />
               </label>
               <label>
-                Pan X
+                Pan Up/Down
                 <input
                   type="range"
                   min="0"
@@ -714,7 +718,7 @@ export default function ImageUploader({
                 />
               </label>
               <label>
-                Pan Y
+                Pan Left/Right
                 <input
                   type="range"
                   min="0"
@@ -875,6 +879,8 @@ export default function ImageUploader({
           border-radius: 14px;
           padding: 0;
           max-width: min(92vw, 560px);
+          background: #F8F7EC;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
         }
         .pp-modal-inner {
           padding: 16px;
