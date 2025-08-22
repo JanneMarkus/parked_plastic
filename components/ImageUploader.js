@@ -1,5 +1,5 @@
 // components/ImageUploader.js
-// Mobile-first, robust camera+gallery uploader with client-side processing
+// Mobile-first gallery uploader with client-side processing (no camera)
 // LIVE PREVIEW: editor modal draws to canvas and updates continuously.
 
 import { useEffect, useRef, useState } from "react";
@@ -32,7 +32,6 @@ export default function ImageUploader({
   onChange,
 }) {
   const fileInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
 
   const [items, setItems] = useState(() =>
     initialItems.map((it, idx) => ({
@@ -311,6 +310,11 @@ export default function ImageUploader({
           }
         }
 
+        // Optional size guard (front-end)
+        if (maxFileMB && workFile.size > maxFileMB * 1024 * 1024) {
+          throw new Error(`File too large (max ${maxFileMB} MB).`);
+        }
+
         // Crop/resize in Worker (default framing; user can adjust later)
         const processed = await processInWorker(workFile, {
           rotate: 0,
@@ -321,7 +325,7 @@ export default function ImageUploader({
           jpegQuality,
         });
 
-        // ---- IMPORTANT: materialize the blob to avoid streaming-hang on Android/Brave
+        // ---- Materialize the blob to avoid streaming-hang on some mobiles
         const processedAB = await processed.arrayBuffer();
         const stableBlob = new Blob([processedAB], { type: "image/jpeg" });
         const uploadFile = new File([stableBlob], ensureJpegName(workFile.name), {
@@ -456,7 +460,7 @@ export default function ImageUploader({
         jpegQuality,
       });
 
-      // ---- Materialize before upload (same reason as above)
+      // Materialize before upload
       const processedAB = await blob.arrayBuffer();
       const stableBlob = new Blob([processedAB], { type: "image/jpeg" });
       const uploadFile = new File([stableBlob], ensureJpegName(it.name), {
@@ -608,27 +612,6 @@ export default function ImageUploader({
 
         <button
           type="button"
-          className="btn btn-primary"
-          onClick={() => cameraInputRef.current?.click()}
-          aria-label="Open camera"
-        >
-          Use Camera
-        </button>
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*,.heic,.heif"
-          capture="environment"
-          multiple
-          hidden
-          onChange={(e) => {
-            handlePick(e.target.files);
-            e.target.value = "";
-          }}
-        />
-
-        <button
-          type="button"
           className="btn btn-ghost"
           onClick={cancelAll}
           aria-label="Cancel all pending uploads"
@@ -659,10 +642,6 @@ export default function ImageUploader({
               ) : null}
               <ProgressRing value={it.progress || 0} />
             </div>
-
-            {typeof it.attempt === "number" && it.status === "uploading" && (
-              <div className="sub">Uploading… (attempt {it.attempt}/3)</div>
-            )}
 
             <div className="meta">
               <div className="name" title={it.name}>
