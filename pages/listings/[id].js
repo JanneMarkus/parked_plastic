@@ -18,17 +18,18 @@ export default function ListingDetail() {
   const [errorMsg, setErrorMsg] = useState("");
   const [mainIdx, setMainIdx] = useState(0);
 
-  // Stable absolute URL for the listing
   const listingUrl = useMemo(() => {
-    if (typeof window !== "undefined") {
-      return window.location.origin + router.asPath;
-    }
-    if (process.env.NEXT_PUBLIC_SITE_URL && id) {
-      const base = process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
-      return `${base}/listings/${id}`;
-    }
-    return "";
-  }, [id, router.asPath]);
+  if (typeof window !== "undefined") {
+    return window.location.origin + router.asPath;
+  }
+  if (process.env.NEXT_PUBLIC_SITE_URL && id) {
+    const base = process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+    return `${base}/listings/${id}`;
+  }
+  return "";
+}, [id, router.asPath]);
+
+const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
 
   // Load session (for owner check)
   useEffect(() => {
@@ -205,7 +206,7 @@ export default function ListingDetail() {
       <div className="topbar">
         <Link href="/" className="crumb" aria-label="Back to Browse">← Back to Browse</Link>
         {isOwner && (
-          <Link href="/account" className="btn btn-outline">Manage listing</Link>
+        <Link href={editUrl} className="btn btn-outline">Manage my listings</Link>
         )}
       </div>
 
@@ -295,7 +296,7 @@ export default function ListingDetail() {
 
           <div className="ctaRow">
             {isOwner ? (
-              <Link className="btn btn-secondary" href="/account">Manage listing</Link>
+              <Link className="btn btn-secondary" href={editUrl}>Manage this listing</Link>
             ) : (
               <>
                 {!disc.is_sold ? (
