@@ -7,6 +7,8 @@ import { Poppins, Source_Sans_3 } from "next/font/google";
 import { supabase } from "@/lib/supabaseClient";
 import { getBlurDataURL } from "@/lib/blurClient";
 import GlobalStyles from "@/components/GlobalStyles";
+import PlaceholderDisc from "@/components/PlaceholderDisc";
+
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -787,23 +789,20 @@ if (mold.trim()) {
               >
                 <div className="img-wrap">
                   {hasImage ? (
-                    <Image
-                      className="img"
-                      src={src}
-                      alt={d.title}
-                      fill
-                      placeholder={blurs[src] ? "blur" : undefined}
-                      blurDataURL={blurs[src]}
-                      sizes="(max-width: 600px) 100vw, (max-width: 1100px) 50vw, 33vw"
-                      style={{ objectFit: "cover" }}
-                      priority={false}
-                    />
-                  ) : (
-                    <div
-                      className="img placeholder"
-                      aria-label="No image available"
-                    />
-                  )}
+  <Image
+    className="img"
+    src={src}
+    alt={d.title}
+    fill
+    placeholder={blurs[src] ? "blur" : undefined}
+    blurDataURL={blurs[src]}
+    sizes="(max-width: 600px) 100vw, (max-width: 1100px) 50vw, 33vw"
+    style={{ objectFit: "cover" }}
+    priority={false}
+  />
+) : (
+  <PlaceholderDisc className="img placeholder" />
+)}
                   {d.is_sold && <div className="soldBanner">SOLD</div>}
                 </div>
 
@@ -1071,7 +1070,12 @@ if (mold.trim()) {
   background: #fff;
 }
 
-
+.img.placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
       `}</style>
     </>
   );

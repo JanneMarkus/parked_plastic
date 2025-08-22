@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { supabase } from "@/lib/supabaseClient";
 import ContactSeller from "@/components/ContactSeller";
+import PlaceholderDisc from "@/components/PlaceholderDisc";
 
 export default function ListingDetail() {
   const router = useRouter();
@@ -225,7 +226,7 @@ const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
                 style={{ objectFit: "cover" }}
               />
             ) : (
-              <div className="hero placeholder" aria-label="No image available" />
+              <PlaceholderDisc className="hero placeholder" />
             )}
             {disc.is_sold && <div className="soldBanner" aria-label="Sold">SOLD</div>}
           </div>
@@ -494,6 +495,13 @@ const styles = `
     .top { grid-template-columns: 1.2fr 1fr; gap: 24px; }
     .title { font-size: 1.8rem; }
   }
+
+  .img.placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
 
   @media (min-width: 768px) {
     .wrap { margin: 32px auto 100px; padding: 0 16px; }
