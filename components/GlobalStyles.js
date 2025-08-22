@@ -152,6 +152,16 @@ export default function GlobalStyles() {
       }
 
       /* buttons */
+
+      .btn-coral {
+  background: var(--coral);
+  color: #fff;
+  font-weight: 700;
+}
+.btn-coral:hover {
+  background: #d85b50;
+}
+
       .pp-btn {
         display: inline-flex;
         align-items: center;
@@ -229,27 +239,28 @@ export default function GlobalStyles() {
       }
 
       .pp-dualrange::before,
-.pp-dualrange::after {
-  z-index: 1;                /* track + teal fill below */
-}
+      .pp-dualrange::after {
+        z-index: 1; /* track + teal fill below */
+      }
 
-/* Inputs (and their thumbs) above the track, and vertically centered */
-.pp-dualrange input[type="range"]{
-  position: absolute;
-  left: 0; right: 0;
-  top: 50%;
-  transform: translateY(30%);  /* centers the slider box vertically */
-  width: 100%;
-  height: var(--thumb);         /* ensures thumb is centered over the track */
-  margin: 0;                    /* Safari alignment quirk */
-  background: transparent;
-  pointer-events: none;         /* thumbs handle events */
-  -webkit-appearance: none;
-  appearance: none;
-  outline: none;
-  accent-color: var(--teal);
-  z-index: 2;                   /* above ::before/::after */
-}
+      /* Inputs (and their thumbs) above the track, and vertically centered */
+      .pp-dualrange input[type="range"] {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        transform: translateY(30%); /* centers the slider box vertically */
+        width: 100%;
+        height: var(--thumb); /* ensures thumb is centered over the track */
+        margin: 0; /* Safari alignment quirk */
+        background: transparent;
+        pointer-events: none; /* thumbs handle events */
+        -webkit-appearance: none;
+        appearance: none;
+        outline: none;
+        accent-color: var(--teal);
+        z-index: 2; /* above ::before/::after */
+      }
       .pp-range-readout {
         font-family: var(--font-source, system-ui);
         font-size: 13px;

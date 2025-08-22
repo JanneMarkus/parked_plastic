@@ -20,17 +20,27 @@ export default function ListingDetail() {
   const [mainIdx, setMainIdx] = useState(0);
 
   const listingUrl = useMemo(() => {
-  if (typeof window !== "undefined") {
-    return window.location.origin + router.asPath;
-  }
-  if (process.env.NEXT_PUBLIC_SITE_URL && id) {
-    const base = process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
-    return `${base}/listings/${id}`;
-  }
-  return "";
-}, [id, router.asPath]);
+    if (typeof window !== "undefined") {
+      return window.location.origin + router.asPath;
+    }
+    if (process.env.NEXT_PUBLIC_SITE_URL && id) {
+      const base = process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+      return `${base}/listings/${id}`;
+    }
+    return "";
+  }, [id, router.asPath]);
 
-const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
+  const editUrl = useMemo(
+    () => (id ? `/listings/${id}/edit` : "/account"),
+    [id]
+  );
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("Spam / scam");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportEmail, setReportEmail] = useState(""); // optional reporter email
+  const [reportSending, setReportSending] = useState(false);
+  const [reportStatus, setReportStatus] = useState(""); // success/error message
 
   // Load session (for owner check)
   useEffect(() => {
@@ -121,10 +131,16 @@ const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
     }
   }, [disc?.price]);
 
-  const imgs = Array.isArray(disc?.image_urls) ? disc.image_urls.filter(Boolean) : [];
+  const imgs = Array.isArray(disc?.image_urls)
+    ? disc.image_urls.filter(Boolean)
+    : [];
   const mainImg = imgs[mainIdx] || null;
   const flightLine =
-    disc && disc.speed != null && disc.glide != null && disc.turn != null && disc.fade != null
+    disc &&
+    disc.speed != null &&
+    disc.glide != null &&
+    disc.turn != null &&
+    disc.fade != null
       ? `${disc.speed} / ${disc.glide} / ${disc.turn} / ${disc.fade}`
       : null;
 
@@ -138,9 +154,19 @@ const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
         </Head>
         <p className="center muted">Loading listing…</p>
         <style jsx>{`
-          .wrap { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
-          .center { text-align: center; margin-top: 40px; }
-          .muted { color: #3A3A3A; opacity: .85; }
+          .wrap {
+            max-width: 1100px;
+            margin: 32px auto;
+            padding: 0 16px;
+          }
+          .center {
+            text-align: center;
+            margin-top: 40px;
+          }
+          .muted {
+            color: #3a3a3a;
+            opacity: 0.85;
+          }
         `}</style>
       </main>
     );
@@ -156,35 +182,106 @@ const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
         <div className="errorCard">
           <p className="errorMsg">{errorMsg || "Listing not found."}</p>
           <div className="errorActions">
-            <Link href="/" className="btn btn-outline">Back to Browse</Link>
+            <Link href="/" className="btn btn-outline">
+              Back to Browse
+            </Link>
           </div>
         </div>
         <style jsx>{`
-          .wrap { max-width: 1100px; margin: 32px auto 80px; padding: 0 16px; }
+          .wrap {
+            max-width: 1100px;
+            margin: 32px auto 80px;
+            padding: 0 16px;
+          }
           .errorCard {
-            background:#fff; border:1px solid #E9E9E9; border-radius:14px;
-            box-shadow:0 4px 10px rgba(0,0,0,0.05); padding:22px; text-align:center;
+            background: #fff;
+            border: 1px solid #e9e9e9;
+            border-radius: 14px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            padding: 22px;
+            text-align: center;
           }
-          .errorMsg { color:#8c2f28; margin:0 0 10px; }
+          .errorMsg {
+            color: #8c2f28;
+            margin: 0 0 10px;
+          }
           .btn {
-            border:2px solid #141B4D; color:#141B4D; padding:10px 14px; border-radius:8px;
-            font-weight:700; text-decoration:none;
+            border: 2px solid #141b4d;
+            color: #141b4d;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-weight: 700;
+            text-decoration: none;
           }
-          .btn:hover { background:#141B4D; color:#fff; }
-          .btn-outline { background:#fff; }
+          .btn:hover {
+            background: #141b4d;
+            color: #fff;
+          }
+          .btn-outline {
+            background: #fff;
+          }
         `}</style>
       </main>
     );
   }
 
-  const metaTitle = disc.title ? `${disc.title} — Parked Plastic` : "Listing — Parked Plastic";
+  async function submitReport(e) {
+    e.preventDefault();
+    if (!id) return;
+    setReportSending(true);
+    setReportStatus("");
+
+    try {
+      // Try to persist to Supabase too (optional)
+      try {
+        await supabase.from("listing_reports").insert({
+          listing_id: id,
+          reason: reportReason,
+          details: reportDetails || null,
+          reporter_email: reportEmail || null,
+        });
+      } catch (_) {
+        // non-fatal if the table doesn't exist
+      }
+
+      const res = await fetch("/api/report-listing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId: id,
+          listingTitle: disc?.title || "Disc listing",
+          listingUrl,
+          reason: reportReason,
+          details: reportDetails,
+          reporterEmail: reportEmail,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to send report.");
+
+      setReportStatus("Thanks — your report was sent.");
+      setReportDetails("");
+      setReportEmail("");
+      setReportReason("Spam / scam");
+      setTimeout(() => setReportOpen(false), 1200);
+    } catch (err) {
+      console.error(err);
+      setReportStatus("Could not send the report. Please try again.");
+    } finally {
+      setReportSending(false);
+    }
+  }
+
+  const metaTitle = disc.title
+    ? `${disc.title} — Parked Plastic`
+    : "Listing — Parked Plastic";
   const metaDesc = (() => {
     const parts = [
       disc.brand,
       disc.mold,
       disc.weight != null ? `${disc.weight}g` : null,
       disc.condition,
-      disc.city
+      disc.city,
     ].filter(Boolean);
     const prefix = parts.length ? `${parts.join(" • ")} — ` : "";
     return (disc.description || "").trim() || `${prefix}Disc listing.`;
@@ -205,9 +302,13 @@ const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
 
       {/* Top breadcrumb / optional owner action */}
       <div className="topbar">
-        <Link href="/" className="crumb" aria-label="Back to Browse">← Back to Browse</Link>
+        <Link href="/" className="crumb" aria-label="Back to Browse">
+          ← Back to Browse
+        </Link>
         {isOwner && (
-        <Link href={editUrl} className="btn btn-outline">Manage my listings</Link>
+          <Link href={editUrl} className="btn btn-outline">
+            Manage my listings
+          </Link>
         )}
       </div>
 
@@ -228,7 +329,11 @@ const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
             ) : (
               <PlaceholderDisc className="hero placeholder" />
             )}
-            {disc.is_sold && <div className="soldBanner" aria-label="Sold">SOLD</div>}
+            {disc.is_sold && (
+              <div className="soldBanner" aria-label="Sold">
+                SOLD
+              </div>
+            )}
           </div>
 
           {imgs.length > 1 && (
@@ -258,46 +363,97 @@ const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
         {/* Details panel */}
         <aside className="panel">
           <h1 className="title">{disc.title}</h1>
-          <div className="meta">
-          </div>
+          <div className="meta"></div>
 
           <div className="priceRow">
             <span className="priceText">{priceText}</span>
-            {disc.condition && <span className="condition">{disc.condition}</span>}
+            {disc.condition && (
+              <span className="condition">{disc.condition}</span>
+            )}
           </div>
 
           <div className="specs">
-            <div className="spec"><label>Brand</label><div>{disc.brand || "—"}</div></div>
-            <div className="spec"><label>Mold</label><div>{disc.mold || "—"}</div></div>
-            <div className="spec"><label>Plastic</label><div>{disc.plastic || "—"}</div></div>
+            <div className="spec">
+              <label>Brand</label>
+              <div>{disc.brand || "—"}</div>
+            </div>
+            <div className="spec">
+              <label>Mold</label>
+              <div>{disc.mold || "—"}</div>
+            </div>
+            <div className="spec">
+              <label>Plastic</label>
+              <div>{disc.plastic || "—"}</div>
+            </div>
             {flightLine && (
               <div className="spec">
                 <label>Flight Numbers</label>
                 <div aria-label="Flight numbers">{flightLine}</div>
               </div>
             )}
-            <div className="spec"><label>Weight</label><div>{disc.weight != null ? `${disc.weight} g` : "N/A"}</div></div>
-            <div className="spec"><label>Condition (<a target="_blank" href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">Sleepy Scale</a>)</label><div>{disc.condition || "—"}</div></div>
-            <div className="spec"><label>Glow Disc?</label><div>{disc.is_glow ==true ? "Yes" : disc.is_glow ==false ? "No" : "Not Specified"}</div></div>
-            <div className="spec"><label>Inked?</label><div>{disc.is_inked ==true ? "Yes" : disc.is_inked ==false ? "No" : "Not Specified"}</div></div>
+            <div className="spec">
+              <label>Weight</label>
+              <div>{disc.weight != null ? `${disc.weight} g` : "N/A"}</div>
+            </div>
+            <div className="spec">
+              <label>
+                Condition (
+                <a
+                  target="_blank"
+                  href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
+                >
+                  Sleepy Scale
+                </a>
+                )
+              </label>
+              <div>{disc.condition || "—"}</div>
+            </div>
+            <div className="spec">
+              <label>Glow Disc?</label>
+              <div>
+                {disc.is_glow == true
+                  ? "Yes"
+                  : disc.is_glow == false
+                  ? "No"
+                  : "Not Specified"}
+              </div>
+            </div>
+            <div className="spec">
+              <label>Inked?</label>
+              <div>
+                {disc.is_inked == true
+                  ? "Yes"
+                  : disc.is_inked == false
+                  ? "No"
+                  : "Not Specified"}
+              </div>
+            </div>
           </div>
 
           <div className="seller">
             {seller?.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img className="avatar" src={seller.avatar_url} alt={seller.full_name || "Seller"} />
+              <img
+                className="avatar"
+                src={seller.avatar_url}
+                alt={seller.full_name || "Seller"}
+              />
             ) : (
               <div className="avatar" aria-hidden="true" />
             )}
             <div>
               <div className="sellername">{seller?.full_name || "Seller"}</div>
-              <div className="muted">Posted {new Date(disc.created_at).toLocaleDateString()}</div>
+              <div className="muted">
+                Posted {new Date(disc.created_at).toLocaleDateString()}
+              </div>
             </div>
           </div>
 
           <div className="ctaRow">
             {isOwner ? (
-              <Link className="btn btn-secondary" href={editUrl}>Manage this listing</Link>
+              <Link className="btn btn-secondary" href={editUrl}>
+                Manage this listing
+              </Link>
             ) : (
               <>
                 {!disc.is_sold ? (
@@ -306,22 +462,36 @@ const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
                     href="#contact"
                     onClick={(e) => {
                       const el = document.getElementById("contact");
-                      if (el) { e.preventDefault(); el.scrollIntoView({ behavior: "smooth" }); }
+                      if (el) {
+                        e.preventDefault();
+                        el.scrollIntoView({ behavior: "smooth" });
+                      }
                     }}
                   >
                     Contact seller
                   </a>
                 ) : (
-                  <button className="btn btn-primary" disabled>Sold — contact unavailable</button>
+                  <button className="btn btn-primary" disabled>
+                    Sold — contact unavailable
+                  </button>
                 )}
-                <Link className="btn btn-secondary" href="/">Back to listings</Link>
+                <Link className="btn btn-secondary" href="/">
+                  Back to listings
+                </Link>
+                <button
+  type="button"
+  className="btn btn-coral"
+  onClick={() => setReportOpen(true)}
+>
+  Report listing
+</button>
               </>
             )}
           </div>
         </aside>
       </section>
 
-      {(disc.description && disc.description.trim()) ? (
+      {disc.description && disc.description.trim() ? (
         <section className="desc" aria-label="Description">
           <h3 className="desctitle">Description</h3>
           <p>{disc.description}</p>
@@ -342,6 +512,99 @@ const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
           size="md"
         />
       </section>
+      {reportOpen && (
+        <div
+          className="modalOverlay"
+          role="dialog"
+          id="report-dialog"
+          aria-modal="true"
+          aria-labelledby="report-title"
+        >
+          <div className="modalCard">
+            <div className="modalHead">
+              <h3 id="report-title">Report listing</h3>
+              <button
+                className="x"
+                onClick={() => setReportOpen(false)}
+                aria-label="Close report form"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={submitReport} className="modalBody">
+              <div className="field">
+                <label htmlFor="reason">Reason</label>
+                <select
+                  id="reason"
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                >
+                  <option>Spam / scam</option>
+                  <option>Inappropriate content</option>
+                  <option>Incorrect / misleading</option>
+                  <option>Counterfeit / prohibited</option>
+                  <option>Other</option>
+                </select>
+              </div>
+
+              <div className="field">
+                <label htmlFor="details">
+                  Details <span className="hint">(optional)</span>
+                </label>
+                <textarea
+                  id="details"
+                  rows={4}
+                  value={reportDetails}
+                  onChange={(e) => setReportDetails(e.target.value)}
+                  placeholder="Add any helpful info…"
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="reporterEmail">
+                  Your email <span className="hint">(optional)</span>
+                </label>
+                <input
+                  id="reporterEmail"
+                  type="email"
+                  value={reportEmail}
+                  onChange={(e) => setReportEmail(e.target.value)}
+                  placeholder="name@example.com"
+                />
+              </div>
+
+              <div className="actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setReportOpen(false)}
+                  disabled={reportSending}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={reportSending}
+                >
+                  {reportSending ? "Sending…" : "Send report"}
+                </button>
+              </div>
+
+              {reportStatus && (
+                <p
+                  className={`status ${
+                    /Thanks/.test(reportStatus) ? "ok" : "err"
+                  }`}
+                >
+                  {reportStatus}
+                </p>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -391,6 +654,60 @@ const styles = `
     grid-template-columns: 1fr;
     gap: 16px;
   }
+
+  /* --- Report modal --- */
+.modalOverlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0,0,0,0.28);
+  display: grid; place-items: center;
+  padding: 16px;
+}
+.modalCard {
+  width: 100%; max-width: 560px;
+  background: #fff; border: 1px solid var(--cloud);
+  border-radius: 14px; box-shadow: 0 14px 38px rgba(0,0,0,.18);
+}
+.modalHead {
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--cloud);
+}
+.modalHead h3 {
+  margin: 0; font-family: 'Poppins', sans-serif; color: var(--storm);
+}
+.modalHead .x {
+  border:none; background:#fff; color: var(--storm);
+  font-size: 22px; line-height: 1; cursor: pointer;
+  width: 34px; height: 34px; border-radius: 8px;
+}
+.modalHead .x:hover { background: var(--tint); }
+
+.modalBody { padding: 14px 16px 16px; }
+.modalBody .field { margin-bottom: 12px; }
+.modalBody label {
+  display:block; font-family: 'Poppins', sans-serif; font-weight: 600;
+  color: var(--storm); margin-bottom: 6px;
+}
+.modalBody .hint { color: #666; font-weight: 500; margin-left: 6px; font-size: .85rem; }
+.modalBody input, .modalBody textarea, .modalBody select {
+  width: 100%; box-sizing: border-box; background: #fff;
+  border: 1px solid var(--cloud); border-radius: 10px;
+  padding: 10px 12px; font-size: 15px; color: var(--char);
+  outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.modalBody input:focus, .modalBody textarea:focus, .modalBody select:focus {
+  border-color: var(--teal); box-shadow: 0 0 0 4px var(--tint);
+}
+.modalBody textarea { resize: vertical; min-height: 96px; }
+
+.modalBody .actions {
+  display:flex; justify-content:flex-end; gap: 10px; margin-top: 6px;
+}
+.btn-ghost { background: #fff; color: var(--storm); border: 2px solid var(--storm); }
+.btn-ghost:hover { background: var(--storm); color: #fff; }
+
+.status { margin-top: 10px; font-size: .95rem; }
+.status.ok { color: #1a6a58; }
+.status.err { color: #8c2f28; }
 
   /* Gallery */
   .gallery {
