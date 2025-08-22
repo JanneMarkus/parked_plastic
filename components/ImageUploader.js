@@ -2,7 +2,7 @@
 // Mobile-first, robust camera+gallery uploader with client-side processing
 // LIVE PREVIEW: editor modal draws to canvas and updates continuously.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * USAGE
@@ -35,7 +35,7 @@ export default function ImageUploader({
   const cameraInputRef = useRef(null);
 
   const [items, setItems] = useState(() =>
-    initialItems.map((it, idx) => ({
+    (initialItems || []).map((it, idx) => ({
       id: `init-${idx}`,
       name: it.key || `image-${idx}.jpg`,
       size: 0,
@@ -52,7 +52,7 @@ export default function ImageUploader({
   const [overall, setOverall] = useState({ pct: 0, txt: "" });
   const [liveMsg, setLiveMsg] = useState("");
 
-  // ---- Editor modal state (now with live canvas preview) ----
+  // ---- Editor modal state (live canvas preview) ----
   const [showEditor, setShowEditor] = useState(false);
   const [editorSrc, setEditorSrc] = useState(null); // objectURL of source (for revoke)
   const [editorIdx, setEditorIdx] = useState(-1);
@@ -65,6 +65,59 @@ export default function ImageUploader({
   const [editorBitmap, setEditorBitmap] = useState(null); // decoded for live preview
   const previewCanvasRef = useRef(null);
 
+  // ---------- Helpers ----------
+  const humanMB = (bytes) => (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  const announce = (s) => setLiveMsg(s);
+
+  const recomputeOverall = (arr) => {
+    const list = arr || items;
+    const n = list.length || 1;
+    const sum = list.reduce(
+      (acc, it) => acc + (it.progress || (it.status === "done" ? 100 : 0)),
+      0
+    );
+    return { pct: Math.round(sum / n), txt: "" };
+  };
+
+  // --- Robust sniffing + safe naming for camera captures ---
+  async function readHeader(file, n = 24) {
+    const buf = await file.slice(0, n).arrayBuffer();
+    return new Uint8Array(buf);
+  }
+  function u8str(u8) {
+    return Array.from(u8)
+      .map((b) => String.fromCharCode(b))
+      .join("");
+  }
+  function sniffKind(u8) {
+    if (u8[0] === 0xff && u8[1] === 0xd8 && u8[2] === 0xff) return "jpeg"; // JPEG
+    if (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47)
+      return "png"; // PNG
+    const riff =
+      u8str(u8.slice(0, 4)) === "RIFF" && u8str(u8.slice(8, 12)) === "WEBP";
+    if (riff) return "webp";
+    if (u8.length >= 12 && u8str(u8.slice(4, 8)) === "ftyp") {
+      const brand = u8str(u8.slice(8, 12)).toLowerCase();
+      if (/(heic|heif|mif1|hevc|heix|avif|avis)/.test(brand))
+        return brand.includes("avif") || brand.includes("avis")
+          ? "avif"
+          : "heic";
+    }
+    return "unknown";
+  }
+  function safeBaseName(name) {
+    const base = (name || "camera").replace(/\.[^.]+$/, "") || "camera";
+    return base
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^\w.-]+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 40) || "camera";
+  }
+  function ensureJpegName(name) {
+    return `${safeBaseName(name)}.jpg`;
+  }
+
   // ---------- Inline Worker for final processing ----------
   const workerRef = useRef(null);
   useEffect(() => {
@@ -72,7 +125,13 @@ export default function ImageUploader({
       const { file, opts } = e.data;
       try {
         const arrBuf = await file.arrayBuffer();
-        const bitmap = await createImageBitmap(new Blob([arrBuf]));
+        let bitmap;
+        try {
+          // Honor EXIF orientation on capable engines (Chromium, etc.)
+          bitmap = await createImageBitmap(new Blob([arrBuf]), { imageOrientation: "from-image" });
+        } catch (_) {
+          bitmap = await createImageBitmap(new Blob([arrBuf]));
+        }
         let { width: w, height: h } = bitmap;
 
         const rotate = (opts.rotate || 0) % 360;
@@ -93,9 +152,9 @@ export default function ImageUploader({
           rotate % 180 !== 0 ? cropW : cropH
         );
         const maxEdge = opts.maxEdgePx || 1600;
-        const scale = curMax > maxEdge ? maxEdge / curMax : 1;
-        const tw = Math.max(1, Math.round((rotate % 180 !== 0 ? cropH : cropW) * scale));
-        const th = Math.max(1, Math.round((rotate % 180 !== 0 ? cropW : cropH) * scale));
+        const scaleEdge = curMax > maxEdge ? maxEdge / curMax : 1;
+        const tw = Math.max(1, Math.round((rotate % 180 !== 0 ? cropH : cropW) * scaleEdge));
+        const th = Math.max(1, Math.round((rotate % 180 !== 0 ? cropW : cropH) * scaleEdge));
 
         const off1 = new OffscreenCanvas(cropW, cropH);
         const o1 = off1.getContext('2d', { alpha: false });
@@ -127,25 +186,6 @@ export default function ImageUploader({
     return () => worker.terminate();
   }, []);
 
-  // Helpers
-  const humanMB = (bytes) => (bytes / (1024 * 1024)).toFixed(1) + " MB";
-  const announce = (s) => setLiveMsg(s);
-
-  const sanitizeExt = (name) => {
-    const base = (name || "image").replace(/\.[^.]+$/, "");
-    return base + ".jpg";
-  };
-
-  const recomputeOverall = (arr) => {
-    const list = arr || items;
-    const n = list.length || 1;
-    const sum = list.reduce(
-      (acc, it) => acc + (it.progress || (it.status === "done" ? 100 : 0)),
-      0
-    );
-    return { pct: Math.round(sum / n), txt: "" };
-  };
-
   async function processInWorker(file, opts) {
     const worker = workerRef.current;
     if (!worker) return file;
@@ -161,25 +201,31 @@ export default function ImageUploader({
     });
   }
 
+  // ---------- Upload with retries & mobile-safe timeout ----------
   async function uploadWithRetries({
     supabase,
     bucket,
     userId,
     file,
-    timeoutMs = 25_000,   // short, mobile-friendly
+    timeoutMs = 25_000, // short, mobile-friendly
     maxRetries = 3,
-    onProgress,           // (p: 0..1, meta)
+    onProgress, // (p: 0..1, meta)
   }) {
-    // Base path without attempt suffix; we’ll append -aN to avoid key collisions
+    // Base path; append -aN to avoid key collisions between retries
     const now = new Date();
-    const base = `${userId}/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(
-      now.getDate()
-    ).padStart(2, "0")}/${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const base = `${userId}/${now.getFullYear()}/${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const withTimeout = (p, ms) =>
       new Promise((resolve, reject) => {
-        const id = setTimeout(() => reject(new Error("Upload timed out")), ms);
+        const id = setTimeout(
+          () => reject(new Error("Upload timed out")),
+          ms
+        );
         p.then((v) => {
           clearTimeout(id);
           resolve(v);
@@ -197,12 +243,13 @@ export default function ImageUploader({
           let p = 0.05;
           onProgress(p, { attempt });
           tick = setInterval(() => {
-            p = Math.min(0.9, p + 0.02); // glide toward 90%
+            // Glide toward 90% to show liveness without faking completion
+            p = Math.min(0.9, p + 0.02);
             onProgress(p, { attempt });
           }, 600);
         }
 
-        // Important: race the supabase promise against our timeout so we don’t hang if abort is ignored.
+        // Race the supabase promise against a timeout so we never hang indefinitely
         const { error } = await withTimeout(
           supabase.storage.from(bucket).upload(key, file, {
             upsert: false,
@@ -236,7 +283,100 @@ export default function ImageUploader({
       announce(`You can upload up to ${maxFiles} photos.`);
       return;
     }
-    const toUse = picked.slice(0, room);
+
+    // Filter out 0-byte and accidental videos from camera UIs
+    const filtered = picked.filter(
+      (f) =>
+        f &&
+        f.size > 0 &&
+        !((f.type && f.type.startsWith("video/")) ||
+          /\.(mp4|mov|3gp)$/i.test(f.name || ""))
+    );
+    if (!filtered.length) {
+      announce("No valid photos were selected.");
+      return;
+    }
+
+    // Normalize mobile captures: sniff & convert HEIC/AVIF/unknowns to JPEG, ensure .jpg name
+    const normalized = [];
+    for (const raw of filtered) {
+      try {
+        const header = await readHeader(raw);
+        const kind = sniffKind(header) || (raw.type || "").toLowerCase();
+        let work = raw;
+
+        // HEIC/HEIF → JPEG (best-effort via heic2any)
+        if (
+          kind === "heic" ||
+          /heic|heif/i.test(raw.type) ||
+          /\.(heic|heif)$/i.test(raw.name || "")
+        ) {
+          try {
+            const heic2any = (await import("heic2any")).default;
+            const out = await heic2any({
+              blob: raw,
+              toType: "image/jpeg",
+              quality: 0.94,
+            });
+            work = new File([out], ensureJpegName(raw.name), {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+          } catch (e) {
+            console.warn("heic2any failed; will let the worker re-encode", e);
+          }
+        }
+        // AVIF → JPEG via canvas (broadly supported)
+        else if (
+          kind === "avif" ||
+          /avif/i.test(raw.type) ||
+          /\.(avif)$/i.test(raw.name || "")
+        ) {
+          try {
+            const bmp = await createImageBitmap(raw);
+            const w = bmp.width,
+              h = bmp.height;
+            const c =
+              typeof OffscreenCanvas !== "undefined"
+                ? new OffscreenCanvas(w, h)
+                : (() => {
+                    const el = document.createElement("canvas");
+                    el.width = w;
+                    el.height = h;
+                    return el;
+                  })();
+            const ctx = c.getContext("2d", { alpha: false });
+            ctx.drawImage(bmp, 0, 0);
+            const out =
+              typeof c.convertToBlob === "function"
+                ? await c.convertToBlob({ type: "image/jpeg", quality: 0.94 })
+                : await new Promise((res) =>
+                    c.toBlob(res, "image/jpeg", 0.94)
+                  );
+            work = new File([out], ensureJpegName(raw.name), {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+          } catch (e) {
+            console.warn("AVIF→JPEG via canvas failed; worker will re-encode", e);
+          }
+        }
+
+        // Ensure the filename ends with .jpg for storage rules and content-type
+        if (!/\.jpe?g$/i.test(work.name || "")) {
+          work = new File([work], ensureJpegName(work.name), {
+            type: work.type || "image/jpeg",
+            lastModified: Date.now(),
+          });
+        }
+        normalized.push(work);
+      } catch (e) {
+        console.warn("Normalization skipped:", e);
+        normalized.push(raw);
+      }
+    }
+
+    const toUse = normalized.slice(0, room);
 
     const newItems = toUse.map((file) => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -258,36 +398,9 @@ export default function ImageUploader({
     for (let idx = 0; idx < newItems.length; idx++) {
       const itemId = newItems[idx].id;
       try {
-        // HEIC → JPEG (best-effort)
         let workFile = newItems[idx].rawFile;
-        const isHeic =
-          /heic|heif/i.test(workFile.type) ||
-          /\.(heic|heif)$/i.test(workFile.name || "");
-        if (isHeic) {
-          setItems((cur) =>
-            cur.map((i) =>
-              i.id === itemId ? { ...i, status: "processing", progress: 10 } : i
-            )
-          );
-          try {
-            const heic2any = (await import("heic2any")).default;
-            const out = await heic2any({
-              blob: workFile,
-              toType: "image/jpeg",
-              quality: 0.92,
-            });
-            workFile = new File(
-              [out],
-              (workFile.name || "image").replace(/\.(heic|heif)$/i, "") +
-                ".jpg",
-              { type: "image/jpeg" }
-            );
-          } catch (err) {
-            console.warn("HEIC conversion failed", err);
-          }
-        }
 
-        // Crop/resize in Worker (default framing; user can adjust later)
+        // In case the camera gave us an image/* with non-JPEG bits, the worker will re-encode → JPEG
         const processed = await processInWorker(workFile, {
           rotate: 0,
           zoom: 1,
@@ -296,6 +409,7 @@ export default function ImageUploader({
           maxEdgePx,
           jpegQuality,
         });
+
         setItems((cur) =>
           cur.map((i) =>
             i.id === itemId ? { ...i, status: "uploading", progress: 60 } : i
@@ -306,7 +420,10 @@ export default function ImageUploader({
           supabase,
           bucket,
           userId,
-          file: new File([processed], sanitizeExt(workFile.name)),
+          file: new File([processed], ensureJpegName(workFile.name), {
+            type: "image/jpeg",
+            lastModified: Date.now(),
+          }),
           onProgress: (p, meta) => {
             setItems((cur) =>
               cur.map((i) =>
@@ -314,7 +431,10 @@ export default function ImageUploader({
                   ? {
                       ...i,
                       // map 0..1 into 60..95 while uploading (100 when finished)
-                      progress: Math.max(60, Math.min(95, Math.round(60 + p * 40))),
+                      progress: Math.max(
+                        60,
+                        Math.min(95, Math.round(60 + p * 40))
+                      ),
                       status: "uploading",
                       attempt: meta?.attempt || 1,
                     }
@@ -346,7 +466,11 @@ export default function ImageUploader({
               ? {
                   ...i,
                   status: "error",
-                  error: err?.message || "Upload failed",
+                  error: /timed out/i.test(String(err))
+                    ? "Upload timed out. Check your connection and try again."
+                    : /decode|processing|bitmap|canvas/i.test(String(err))
+                    ? "That photo format isn’t supported on this device. Try another or set your camera to JPEG."
+                    : err?.message || "Upload failed. Please try again.",
                   progress: 0,
                 }
               : i
@@ -354,7 +478,7 @@ export default function ImageUploader({
         );
         announce("Upload failed");
       } finally {
-        setOverall(recomputeOverall());
+        setOverall(recomputeOverall(items));
       }
     }
   };
@@ -419,22 +543,29 @@ export default function ImageUploader({
             : x
         )
       );
+
       const blob = await processInWorker(sourceFile, {
         ...editorState,
         maxEdgePx,
         jpegQuality,
       });
+
       setItems((cur) =>
         cur.map((x, i) =>
           i === idx ? { ...x, status: "uploading", progress: 60 } : x
         )
       );
+
       const { url, key } = await uploadWithRetries({
         supabase,
         bucket,
         userId,
-        file: new File([blob], sanitizeExt(it.name)),
+        file: new File([blob], ensureJpegName(it.name), {
+          type: "image/jpeg",
+          lastModified: Date.now(),
+        }),
       });
+
       setItems((cur) =>
         cur.map((x, i) =>
           i === idx
@@ -465,7 +596,6 @@ export default function ImageUploader({
 
   // ---------- Remove / Cancel ----------
   const removeItem = (id) => setItems((cur) => cur.filter((i) => i.id !== id));
-
   const cancelAll = () => {
     setItems((cur) => cur.filter((i) => i.status === "done"));
     announce("Canceled pending uploads");
@@ -475,7 +605,8 @@ export default function ImageUploader({
   useEffect(() => {
     onChange && onChange(items);
     setOverall(recomputeOverall(items));
-  }, [items]); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   // ---------- Live preview renderer (canvas) ----------
   useEffect(() => {
@@ -532,7 +663,6 @@ export default function ImageUploader({
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.rotate((angle * Math.PI) / 180);
-    // After rotation, the unrotated image is centered; draw so it covers frame
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(tmp, -drawW / 2, -drawH / 2, drawW, drawH);
     ctx.restore();
@@ -581,7 +711,7 @@ export default function ImageUploader({
           type="file"
           accept="image/*,.heic,.heif"
           capture="environment"
-          multiple
+          /* single capture for Android stability */
           hidden
           onChange={(e) => {
             handlePick(e.target.files);
@@ -600,11 +730,7 @@ export default function ImageUploader({
       </div>
 
       {items.length > 0 && (
-        <div
-          className="pp-overall"
-          role="group"
-          aria-label="Overall upload status"
-        >
+        <div className="pp-overall" role="group" aria-label="Overall upload status">
           <div className="bar" aria-hidden="true">
             <span style={{ width: `${overall.pct}%` }} />
           </div>
@@ -616,11 +742,7 @@ export default function ImageUploader({
 
       <ul className="pp-grid" role="list">
         {items.map((it, idx) => (
-          <li
-            key={it.id}
-            className="pp-item"
-            aria-label={`${it.name}, ${it.status}`}
-          >
+          <li key={it.id} className="pp-item" aria-label={`${it.name}, ${it.status}`}>
             <div className={`thumb ${it.status}`}>
               {it.url ? (
                 <img src={it.url} alt="Uploaded preview" />
@@ -629,9 +751,10 @@ export default function ImageUploader({
               ) : null}
               <ProgressRing value={it.progress || 0} />
             </div>
+
             {typeof it.attempt === "number" && it.status === "uploading" && (
-  <div className="sub">Uploading… (attempt {it.attempt}/3)</div>
-)}
+              <div className="sub">Uploading… (attempt {it.attempt}/3)</div>
+            )}
 
             <div className="meta">
               <div className="name" title={it.name}>
@@ -712,7 +835,7 @@ export default function ImageUploader({
                 />
               </label>
               <label>
-                Pan Up/Down
+                Pan X
                 <input
                   type="range"
                   min="0"
@@ -725,7 +848,7 @@ export default function ImageUploader({
                 />
               </label>
               <label>
-                Pan Left/Right
+                Pan Y
                 <input
                   type="range"
                   min="0"
@@ -739,18 +862,10 @@ export default function ImageUploader({
               </label>
             </div>
             <div className="actions">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={closeEditor}
-              >
+              <button type="button" className="btn btn-ghost" onClick={closeEditor}>
                 Cancel
               </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={applyEditor}
-              >
+              <button type="button" className="btn btn-primary" onClick={applyEditor}>
                 Apply
               </button>
             </div>
