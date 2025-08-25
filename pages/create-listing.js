@@ -1,16 +1,58 @@
 // pages/create-listing.js
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from '@/lib/supabaseBrowser'
 import ImageUploader from "@/components/ImageUploader";
+import { createServerClient } from "@supabase/ssr";
+import { serialize } from "cookie";
 
-export default function CreateListing() {
+/* --------------------------- Server-side auth gate --------------------------- */
+const supabase = getSupabaseBrowser()
+
+export async function getServerSideProps(ctx) {
+  const serverSupabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get(name) {
+          return ctx.req.cookies[name];
+        },
+        set(name, value, options) {
+          const cookie = serialize(name, value, options);
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+        },
+        remove(name, options) {
+          const cookie = serialize(name, "", { ...options, maxAge: 0 });
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+        },
+      },
+    }
+  );
+
+  const { data } = await serverSupabase.auth.getUser();
+  if (!data?.user) {
+    return {
+      redirect: {
+        destination: `/login?redirect=${encodeURIComponent("/create-listing")}`,
+        permanent: false,
+      },
+    };
+  }
+
+  return {
+    props: { user: data.user },
+  };
+}
+
+/* ---------------------------------- Page ---------------------------------- */
+export default function CreateListing({ user }) {
   const router = useRouter();
-
-  // Auth gate
-  const [checking, setChecking] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
 
   // Flight numbers (REQUIRED)
   const [speed, setSpeed] = useState("");
@@ -32,27 +74,11 @@ export default function CreateListing() {
 
   // Images (from new uploader)
   const [imageItems, setImageItems] = useState([]); // full objects from uploader
-  const imageUrls = imageItems.filter(i => i.status === "done").map(i => i.url);
+  const imageUrls = imageItems.filter((i) => i.status === "done").map((i) => i.url);
 
   // UI state
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-
-  // ---------- Auth ----------
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!active) return;
-      setCurrentUser(data?.session?.user ?? null);
-      setChecking(false);
-    })();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setCurrentUser(session?.user ?? null);
-      setChecking(false);
-    });
-    return () => sub?.subscription?.unsubscribe?.();
-  }, []);
 
   // Number helpers for Turn control
   function toHalfStep(n) { return Math.round(n * 2) / 2; }
@@ -82,18 +108,13 @@ export default function CreateListing() {
     e.preventDefault();
     setErrorMsg("");
 
-    if (!currentUser) {
-      router.push(`/login?redirect=${encodeURIComponent("/create-listing")}`);
-      return;
-    }
     if (!title.trim()) {
       setErrorMsg("Please enter a title.");
       return;
     }
 
     // ---- Flight number validation (required, ranges, .5 step) ----
-    const stepIsValid = (v) =>
-      Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
+    const stepIsValid = (v) => Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
     const numOrNaN = (s) => (s === "" ? NaN : Number(s));
     const s = numOrNaN(speed),
       g = numOrNaN(glide),
@@ -141,7 +162,7 @@ export default function CreateListing() {
           description: description.trim() || null,
           image_urls: imageUrls, // from uploader (already uploaded)
           city: null,
-          owner: currentUser.id,
+          owner: user.id,
           is_sold: false,
           speed: s,
           glide: g,
@@ -167,53 +188,6 @@ export default function CreateListing() {
     () => title.trim().length > 0 && !loading,
     [title, loading]
   );
-
-  // ---------- UI ----------
-  if (checking) {
-    return (
-      <main className="wrap">
-        <Head>
-          <title>Post a Disc — Parked Plastic</title>
-          <meta name="robots" content="noindex" />
-        </Head>
-        <p className="center muted">Checking session…</p>
-        <style jsx>{`
-          .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
-          .center { text-align: center; margin-top: 40px; }
-          .muted { color: #3a3a3a; opacity: 0.85; }
-        `}</style>
-      </main>
-    );
-  }
-
-  if (!currentUser) {
-    return (
-      <main className="wrap">
-        <Head>
-          <title>Post a Disc — Parked Plastic</title>
-          <meta
-            name="description"
-            content="Sign in to post a disc listing on Parked Plastic."
-          />
-        </Head>
-        <style jsx>{styles}</style>
-        <div className="panel">
-          <h1>Post a Disc</h1>
-          <p className="muted">You need to sign in to create a listing.</p>
-          <button
-            className="btn btn-primary"
-            onClick={() =>
-              router.push(
-                `/login?redirect=${encodeURIComponent("/create-listing")}`
-              )
-            }
-          >
-            Sign In
-          </button>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <main className="wrap">
@@ -244,7 +218,7 @@ export default function CreateListing() {
               <label>Images</label>
               <ImageUploader
                 supabase={supabase}
-                userId={currentUser.id}
+                userId={user.id}
                 bucket="listing-images"
                 maxFiles={10}
                 maxFileMB={12}
@@ -417,7 +391,11 @@ export default function CreateListing() {
               />
               <p className="hintRow">Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new</p>
               <p className="hintRow">
-                <a target="_blank" href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
+                >
                   Learn more about Sleepy Scale here
                 </a>
               </p>
@@ -521,7 +499,7 @@ const styles = `
   }
   .wrap { max-width: 960px; margin: 24px auto 80px; padding: 0 12px; background: var(--sea); }
   .titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--storm); letter-spacing: .5px; margin: 0; font-size: 1.6rem; }
+  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; color: --var(storm); letter-spacing: .5px; margin: 0; font-size: 1.6rem; }
   .subtle { color: var(--char); opacity: .85; margin: 0; }
   .statusRegion { min-height: 22px; margin-bottom: 8px; }
   .error, .info { border-radius: 10px; padding: 10px 12px; font-size: .95rem; margin: 8px 0; }
@@ -552,5 +530,9 @@ const styles = `
   .checks { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
   .check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--storm); }
   .check input { transform: translateY(1px); }
-  @media (min-width: 768px) { h1 { font-size: 2rem; } .wrap { margin: 32px auto 80px; padding: 0 16px; } .grid2 { grid-template-columns: 1fr 1fr; gap: 16px 16px; } }
+  @media (min-width: 768px) {
+    h1 { font-size: 2rem; }
+    .wrap { margin: 32px auto 80px; padding: 0 16px; }
+    .grid2 { grid-template-columns: 1fr 1fr; gap: 16px 16px; }
+  }
 `;

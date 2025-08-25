@@ -2,7 +2,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
+
+const supabase = getSupabaseBrowser();
 
 export default function ContactInfoCard({ userId }) {
   const [initial, setInitial] = useState({ public_email: "", phone: "", messenger: "" });
@@ -20,10 +22,19 @@ export default function ContactInfoCard({ userId }) {
   );
 
   useEffect(() => {
-    if (!userId) return;
-    let active = true;
-    (async () => {
-      setLoading(true);
+  let active = true;
+  (async () => {
+    if (!userId) {
+      if (active) {
+        setInitial({ public_email: "", phone: "", messenger: "" });
+        setForm({ public_email: "", phone: "", messenger: "" });
+        setLoading(false);
+        setMsg({ kind: "", text: "" });
+      }
+      return;
+    }
+    setLoading(true);
+    setMsg({ kind: "", text: "" });
       setMsg({ kind: "", text: "" });
       const { data, error } = await supabase
         .from("profiles")
@@ -82,7 +93,9 @@ export default function ContactInfoCard({ userId }) {
         phone: form.phone.trim() || null,
         messenger: form.messenger.trim() || null,
       };
-      const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
+      const { error } = await supabase
+  .from("profiles")
+  .upsert({ id: userId, ...payload }, { onConflict: "id" });
       if (error) throw error;
 
       setInitial({

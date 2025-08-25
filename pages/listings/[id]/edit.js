@@ -2,18 +2,84 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ImageUploader from "@/components/ImageUploader";
+import { createServerClient } from "@supabase/ssr";
+import { serialize } from "cookie";
 
-export default function EditListing() {
+const supabase = getSupabaseBrowser();
+
+export async function getServerSideProps(ctx) {
+  const supa = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get(name) {
+          return ctx.req.cookies[name];
+        },
+        set(name, value, options) {
+          const cookie = serialize(name, value, options);
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+        },
+        remove(name, options) {
+          const cookie = serialize(name, "", { ...options, maxAge: 0 });
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+        },
+      },
+    }
+  );
+
+  const { data: userRes } = await supa.auth.getUser();
+  const user = userRes?.user || null;
+
+  if (!user) {
+    return {
+      redirect: {
+        destination: `/login?redirect=${encodeURIComponent(ctx.resolvedUrl)}`,
+        permanent: false,
+      },
+    };
+  }
+
+  const id = ctx.params?.id;
+  const { data: disc, error } = await supa
+    .from("discs")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error || !disc) {
+    return {
+      redirect: { destination: "/account", permanent: false },
+    };
+  }
+
+  if (disc.owner !== user.id) {
+    return {
+      redirect: { destination: `/listings/${id}`, permanent: false },
+    };
+  }
+  
+  return {
+    props: {
+      initialUser: { id: user.id, email: user.email ?? null },
+      initialDisc: disc,
+    },
+  };
+}
+
+export default function EditListing({ initialUser, initialDisc }) {
   const router = useRouter();
-  const { id } = router.query;
-
+  
   // Gate & fetch
-  const [checking, setChecking] = useState(true);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
+  
   // Listing & form state
   const [disc, setDisc] = useState(null);
   const [title, setTitle] = useState("");
@@ -33,81 +99,15 @@ export default function EditListing() {
   const [fade, setFade] = useState("");
   const [isInked, setIsInked] = useState(false);
   const [isGlow, setIsGlow] = useState(false);
-
+  
   // New uploader state (child reports here)
   const [imageItems, setImageItems] = useState([]); // from ImageUploader onChange
   const imageUrls = imageItems.filter((i) => i.status === "done" && i.url).map((i) => i.url);
-
+  
   // UI state
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
-
-  // ---------- Auth + load listing ----------
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!active) return;
-      const u = data?.session?.user ?? null;
-      setUser(u);
-      setChecking(false);
-
-      if (!u) {
-        if (id)
-          router.replace(
-            `/login?redirect=${encodeURIComponent(`/listings/${id}/edit`)}`
-          );
-        return;
-      }
-      if (!id) return;
-
-      setLoading(true);
-      const { data: d, error } = await supabase
-        .from("discs")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error || !d) {
-        alert("Listing not found.");
-        router.push("/account");
-        return;
-      }
-      if (!active) return;
-
-      // Ownership check
-      if (d.owner !== u.id) {
-        alert("You can only edit your own listings.");
-        router.push(`/listings/${id}`);
-        return;
-      }
-
-      setDisc(d);
-      setTitle(d.title || "");
-      setBrand(d.brand || "");
-      setMold(d.mold || "");
-      setPlastic(d.plastic || "");
-      setConditionScore(d.condition ?? "");
-      setWeight(d.weight ?? "");
-      setPrice(d.price ?? "");
-      setCity(d.city || "Thunder Bay");
-      setDescription(d.description || "");
-      setIsSold(!!d.is_sold);
-
-      // Seed flight numbers (may be null on legacy rows)
-      setSpeed(d.speed ?? "");
-      setGlide(d.glide ?? "");
-      setTurn(d.turn ?? "");
-      setFade(d.fade ?? "");
-      setIsInked(Boolean(d.is_inked ?? d.inked ?? false));
-      setIsGlow(Boolean(d.is_glow ?? false));
-
-      setLoading(false);
-    })();
-    return () => {
-      active = false;
-    };
-  }, [id, router]);
-
+  
   // Number helpers for Turn control
   function toHalfStep(n) { return Math.round(n * 2) / 2; }
   function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
@@ -123,6 +123,35 @@ export default function EditListing() {
       return String(next);
     });
   }
+  // Seed from SSR (already authenticated & owner-checked)
+  useEffect(() => {
+  // Seed what we have from SSR (already auth+owner-checked server-side)
+  if (initialUser) setUser(initialUser);
+  if (initialDisc) {
+    setDisc(initialDisc);
+  
+    setTitle(initialDisc.title || "");
+    setBrand(initialDisc.brand || "");
+    setMold(initialDisc.mold || "");
+    setPlastic(initialDisc.plastic || "");
+    setConditionScore(initialDisc.condition ?? "");
+    setWeight(initialDisc.weight ?? "");
+    setPrice(initialDisc.price ?? "");
+    setCity(initialDisc.city || "Thunder Bay");
+    setDescription(initialDisc.description || "");
+    setIsSold(!!initialDisc.is_sold);
+  
+    setSpeed(initialDisc.speed ?? "");
+    setGlide(initialDisc.glide ?? "");
+    setTurn(initialDisc.turn ?? "");
+    setFade(initialDisc.fade ?? "");
+    setIsInked(Boolean(initialDisc.is_inked ?? initialDisc.inked ?? false));
+    setIsGlow(Boolean(initialDisc.is_glow ?? false));
+  }
+  
+  // Even if something's missing, drop the spinner so we can render an error or fallback.
+  setLoading(false);
+  }, [initialUser, initialDisc]);
   function sanitizeTurn() {
     setTurn((prev) => {
       if (prev === "") return prev;
@@ -229,7 +258,7 @@ export default function EditListing() {
   );
 
   // ---------- UI ----------
-  if (checking || loading) {
+  if (loading) {
     return (
       <main className="wrap">
         <Head>
@@ -245,7 +274,7 @@ export default function EditListing() {
       </main>
     );
   }
-  if (!user) return null;
+  //user is guaranteed by SSR; no null return needed
 
   return (
     <main className="wrap">
@@ -440,7 +469,7 @@ export default function EditListing() {
               />
               <p className="hintRow">Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new</p>
               <p className="hintRow">
-                <a target="_blank" href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">
+                <a target="_blank" rel="noopener noreferrer" href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">
                   Learn more about Sleepy Scale here
                 </a>
               </p>

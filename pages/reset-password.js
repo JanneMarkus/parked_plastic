@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
+const supabase = getSupabaseBrowser();
 
 export default function ResetPassword() {
   const router = useRouter();

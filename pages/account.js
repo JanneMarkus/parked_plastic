@@ -3,16 +3,64 @@ import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/router";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from '@/lib/supabaseBrowser'
 import ContactInfoCard from "@/components/ContactInfoCard";
+import { createServerClient } from "@supabase/ssr";
+import { serialize } from "cookie";
 
 /* ------------------------- Small helpers/components ------------------------ */
+const supabase = getSupabaseBrowser()
 
 const CAD = new Intl.NumberFormat("en-CA", {
   style: "currency",
   currency: "CAD",
 });
+
+export async function getServerSideProps(ctx) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get(name) {
+          return ctx.req.cookies[name];
+        },
+        set(name, value, options) {
+          // write Set-Cookie header on SSR responses
+          const cookie = serialize(name, value, options);
+          let existing = ctx.res.getHeader('Set-Cookie') ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader('Set-Cookie', [...existing, cookie]);
+        },
+        remove(name, options) {
+          const cookie = serialize(name, '', { ...options, maxAge: 0 });
+          let existing = ctx.res.getHeader('Set-Cookie') ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader('Set-Cookie', [...existing, cookie]);
+        },
+      },
+    }
+  );
+
+  // Revalidating check (recommended for server-side guards)
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data?.user) {
+    return {
+      redirect: {
+        destination: `/login?redirect=${encodeURIComponent(ctx.resolvedUrl)}`,
+        permanent: false,
+      },
+    };
+  }
+
+  return {
+    props: {
+      initialSession: null, // not required with @supabase/ssr, but harmless
+      user: data.user,
+    },
+  };
+}
 
 function StatusTabs({ value, counts, onChange }) {
   return (
@@ -232,43 +280,12 @@ function ListingCard({ l, onToggleSold, onDelete }) {
 
 /* ---------------------------------- Page ---------------------------------- */
 
-export default function Account() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
-  const [user, setUser] = useState(null);
-
+export default function Account({ user }) {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all"); // all | active | sold
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Auth gate
-  useEffect(() => {
-    let active = true;
-
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!active) return;
-      const u = data?.session?.user ?? null;
-      setUser(u);
-      setReady(true);
-      if (!u)
-        router.replace(`/login?redirect=${encodeURIComponent("/account")}`);
-    })();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => {
-      subscription?.unsubscribe?.();
-      active = false;
-    };
-  }, [router]);
-
-  // Load listings
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
@@ -340,30 +357,6 @@ export default function Account() {
       setListings(prev); // revert
     }
   }
-
-  // Guards
-  if (!ready) {
-    return (
-      <main className="pp-wrap">
-        <Head>
-          <title>My Listings — Parked Plastic</title>
-          <meta name="robots" content="noindex" />
-        </Head>
-        <p className="center muted">Checking session…</p>
-        <style jsx>{`
-          .center {
-            text-align: center;
-            margin-top: 40px;
-          }
-          .muted {
-            color: var(--char, #3a3a3a);
-            opacity: 0.85;
-          }
-        `}</style>
-      </main>
-    );
-  }
-  if (!user) return null;
 
   return (
     <>

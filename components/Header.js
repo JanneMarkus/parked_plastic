@@ -4,8 +4,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import BrandLogo from "@/components/BrandLogo";
+
+const supabase = getSupabaseBrowser();
 
 export default function Header() {
   const router = useRouter();
@@ -17,8 +19,8 @@ export default function Header() {
     let mounted = true;
 
     async function readUserAndProfile() {
-      const { data } = await supabase.auth.getUser();
-      const u = data?.user ?? null;
+      const { data } = await supabase.auth.getSession();
+      const u = data?.session?.user ?? null;
       if (!mounted) return;
 
       setUser(u);

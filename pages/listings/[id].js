@@ -4,9 +4,11 @@ import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ContactSeller from "@/components/ContactSeller";
 import PlaceholderDisc from "@/components/PlaceholderDisc";
+
+const supabase = getSupabaseBrowser();
 
 export default function ListingDetail() {
   const router = useRouter();
@@ -400,7 +402,7 @@ export default function ListingDetail() {
                 Condition (
                 <a
                   target="_blank"
-                  href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
+                  rel="noopener noreferrer" href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
                 >
                   Sleepy Scale
                 </a>

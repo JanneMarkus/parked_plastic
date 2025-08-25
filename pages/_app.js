@@ -1,13 +1,12 @@
 // pages/_app.js
 import { useEffect } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import Header from "@/components/Header";
 import GlobalStyles from "@/components/GlobalStyles";
 import { Poppins, Source_Sans_3 } from "next/font/google";
 import "@/styles/globals.css";
-import { Analytics } from "@vercel/analytics/next"
-
-<Analytics />
+import { Analytics } from "@vercel/analytics/react";
+import { SessionContextProvider } from "@supabase/auth-helpers-react";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -23,16 +22,17 @@ const source = Source_Sans_3({
   variable: "--font-source",
 });
 
+const supabase = getSupabaseBrowser();
+
 export default function MyApp({ Component, pageProps }) {
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       const user = session?.user;
       if (!user) return;
+      if (event !== "SIGNED_IN" && event !== "USER_UPDATED") return;
 
-      // With email/password, user_metadata may be mostly empty.
-      // Fall back to a sensible display name from email.
       const emailName =
         typeof user.email === "string" ? user.email.split("@")[0] : null;
 
@@ -47,8 +47,6 @@ export default function MyApp({ Component, pageProps }) {
           avatar_url: user.user_metadata?.avatar_url || null,
         });
       } catch (e) {
-        // Non-blocking: avoid crashing the app on profile upsert hiccups.
-        // eslint-disable-next-line no-console
         console.warn("Failed to upsert profile", e);
       }
     });
@@ -60,9 +58,15 @@ export default function MyApp({ Component, pageProps }) {
 
   return (
     <div className={`${poppins.variable} ${source.variable}`}>
-      <GlobalStyles />
-      <Header />
-      <Component {...pageProps} />
+      <SessionContextProvider
+        supabaseClient={supabase}
+        initialSession={pageProps?.initialSession}
+      >
+        <GlobalStyles />
+        <Header />
+        <Component {...pageProps} />
+        <Analytics />
+      </SessionContextProvider>
     </div>
   );
 }

@@ -4,11 +4,12 @@ import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
 import { Poppins, Source_Sans_3 } from "next/font/google";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { getBlurDataURL } from "@/lib/blurClient";
 import GlobalStyles from "@/components/GlobalStyles";
 import PlaceholderDisc from "@/components/PlaceholderDisc";
 
+const supabase = getSupabaseBrowser();
 
 const poppins = Poppins({
   subsets: ["latin"],

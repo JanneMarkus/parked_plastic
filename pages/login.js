@@ -2,7 +2,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseBrowser } from '@/lib/supabaseBrowser'
+import { createServerClient } from "@supabase/ssr";
+import { serialize } from "cookie";
+
+/* --------------------------- Shared small helpers -------------------------- */
+const supabase = getSupabaseBrowser()
 
 function sanitizeRedirectPath(raw) {
   if (typeof raw !== "string") return "/";
@@ -11,12 +16,60 @@ function sanitizeRedirectPath(raw) {
   return raw.startsWith("/") ? raw : "/";
 }
 
-const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+const isValidEmail = (v) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 
-export default function Login() {
+/* --------------------------- Server-side redirect -------------------------- */
+export async function getServerSideProps(ctx) {
+  // Read & sanitize the redirect target on the server
+  const raw = typeof ctx.query?.redirect === "string" ? ctx.query.redirect : "/";
+  const nextPath = sanitizeRedirectPath(raw);
+
+  // Wire @supabase/ssr with cookie adapter for Pages Router
+  const serverSupabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get(name) {
+          return ctx.req.cookies[name];
+        },
+        set(name, value, options) {
+          const cookie = serialize(name, value, options);
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+        },
+        remove(name, options) {
+          const cookie = serialize(name, "", { ...options, maxAge: 0 });
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+        },
+      },
+    }
+  );
+
+  // If already signed in, bounce to target immediately
+  const { data } = await serverSupabase.auth.getUser();
+  if (data?.user) {
+    return {
+      redirect: { destination: nextPath, permanent: false },
+    };
+  }
+
+  return {
+    props: {
+      initialRedirect: nextPath,
+    },
+  };
+}
+
+/* ---------------------------------- Page ---------------------------------- */
+export default function Login({ initialRedirect = "/" }) {
   const router = useRouter();
   const rawRedirect =
-    typeof router.query.redirect === "string" ? router.query.redirect : "/";
+    typeof router.query.redirect === "string" ? router.query.redirect : initialRedirect;
   const nextPath = useMemo(() => sanitizeRedirectPath(rawRedirect), [rawRedirect]);
 
   const [checking, setChecking] = useState(true);
@@ -33,7 +86,7 @@ export default function Login() {
   const [resending, setResending] = useState(false);
   const [canResendConfirm, setCanResendConfirm] = useState(false);
 
-  // If already signed in, show “continue” + “sign out”
+  // Lightweight “already signed in?” client check (SSR already redirected most cases)
   useEffect(() => {
     let active = true;
     (async () => {
@@ -75,7 +128,7 @@ export default function Login() {
         email: clean,
         options: {
           emailRedirectTo:
-            (typeof window !== "undefined" && window.location?.origin)
+            typeof window !== "undefined" && window.location?.origin
               ? `${window.location.origin}/login?redirect=${encodeURIComponent(nextPath)}`
               : undefined,
         },
@@ -133,7 +186,9 @@ export default function Login() {
           // Handle “already registered” nicely
           if (/already registered/i.test(raw) || error?.code === "user_already_registered") {
             setMode("signin");
-            setInfoMsg("That email is already registered. Sign in below or use “Forgot your password?”.");
+            setInfoMsg(
+              "That email is already registered. Sign in below or use “Forgot your password?”."
+            );
             return;
           }
           // If provider says email not confirmed yet, offer a resend
@@ -193,9 +248,7 @@ export default function Login() {
   return (
     <main className="wrap">
       <Head>
-        <title>
-          {mode === "signup" ? "Create account" : mode === "forgot" ? "Reset password" : "Sign in"} — Parked Plastic
-        </title>
+        <title>{`${mode === "signup" ? "Create account" : mode === "forgot" ? "Reset password" : "Sign in"} — Parked Plastic`}</title>
         <meta
           name="description"
           content="Sign in or create an account on Parked Plastic with your email and password."
