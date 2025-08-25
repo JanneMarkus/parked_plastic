@@ -116,7 +116,7 @@ export default function ContactInfoCard({ userId }) {
       <div style={{ marginBottom: "12px" }}>
         <h2 style={{ margin: 0 }}>Contact Info</h2>
         <p style={{ color: "var(--char)", opacity: 0.85, margin: 0, fontSize: ".95rem" }}>
-          These details show on your listings. Leave blank to hide a channel.
+          Note: These details will show publicly on your listings behind a "reveal contact options" button. Leave blank to hide a channel.
         </p>
       </div>
 

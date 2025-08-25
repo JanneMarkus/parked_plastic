@@ -1,6 +1,13 @@
 // components/ContactSeller.js
 import React, { useEffect, useMemo, useState } from "react";
-import { MessageSquareText, Mail, Copy, ExternalLink, Info, Eye } from "lucide-react";
+import {
+  MessageSquareText,
+  Mail,
+  Copy,
+  ExternalLink,
+  Info,
+  Eye,
+} from "lucide-react";
 
 function encodeMessage(title, url) {
   const msg = `Hi! I'm interested in your listing: ${title} — ${url}`;
@@ -23,7 +30,7 @@ function cleanPhone(raw = "") {
 }
 
 export default function ContactSeller({
-  listingId,           // required
+  listingId, // required
   listingTitle,
   listingUrl,
   allowSMS = true,
@@ -32,12 +39,13 @@ export default function ContactSeller({
 }) {
   const [revealing, setRevealing] = useState(false);
   const [error, setError] = useState("");
-  const [contact, setContact] = useState(null);     // { public_email, phone, messenger }
+  const [contact, setContact] = useState(null); // { public_email, phone, messenger }
   const [hasContact, setHasContact] = useState(undefined); // <- NEW: boolean | undefined
   const [peeking, setPeeking] = useState(true);
 
   const msg = encodeMessage(listingTitle, listingUrl);
-  const sizeClass = size === "lg" ? "btn-lg" : size === "sm" ? "btn-sm" : "btn-md";
+  const sizeClass =
+    size === "lg" ? "btn-lg" : size === "sm" ? "btn-sm" : "btn-md";
 
   // ---- Peek on mount (boolean only, safe) ----
   useEffect(() => {
@@ -46,7 +54,9 @@ export default function ContactSeller({
     (async () => {
       try {
         setPeeking(true);
-        const res = await fetch(`/api/reveal-contact?listingId=${encodeURIComponent(listingId)}`);
+        const res = await fetch(
+          `/api/reveal-contact?listingId=${encodeURIComponent(listingId)}`
+        );
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || "Failed to check contact.");
         if (!cancelled) setHasContact(Boolean(json.hasContact));
@@ -56,7 +66,9 @@ export default function ContactSeller({
         if (!cancelled) setPeeking(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [listingId]);
 
   // Build actions only AFTER we have contact
@@ -65,28 +77,43 @@ export default function ContactSeller({
     const email = contact?.public_email || "";
     const messenger = cleanMessenger(contact?.messenger || "");
     const phone = cleanPhone(contact?.phone || "");
+    const emailHref = email
+      ? `mailto:${email}` +
+        `?subject=${encodeURIComponent(`Interested in: ${listingTitle}`)}` +
+        `&body=${encodeURIComponent(
+          `Hi! I'm interested in your listing: ${listingTitle} — ${listingUrl}`
+        )}`
+      : "";
     return [
       messenger && {
         key: "messenger",
         label: "Messenger",
         icon: <ExternalLink size={18} aria-hidden />,
-        onClick: () => window.open(`https://m.me/${messenger}`, "_blank", "noopener,noreferrer"),
+        onClick: () =>
+          window.open(
+            `https://m.me/${messenger}`,
+            "_blank",
+            "noopener,noreferrer"
+          ),
         primary: true,
       },
-      allowSMS && phone && {
-        key: "sms",
-        label: "Text",
-        icon: <MessageSquareText size={18} aria-hidden />,
-        onClick: () => (window.location.href = `sms:${phone}?body=${msg}`),
-      },
+      allowSMS &&
+        phone && {
+          key: "sms",
+          label: "Text",
+          icon: <MessageSquareText size={18} aria-hidden />,
+          onClick: () => (window.location.href = `sms:${phone}?body=${msg}`),
+        },
       email && {
         key: "email",
         label: "Email",
         icon: <Mail size={18} aria-hidden />,
-        onClick: () => {
-          const subject = encodeURIComponent(`Interested in: ${listingTitle}`);
-          window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${msg}`;
-        },
+        href: `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(
+          `Interested in: ${listingTitle}`
+        )}&body=${msg}`,
+        isLink: true,
+        target: "_blank",
+        rel: "noopener noreferrer",
       },
     ].filter(Boolean);
   }, [contact, allowSMS, listingTitle, msg]);
@@ -123,39 +150,116 @@ export default function ContactSeller({
     <section className="cs-wrap" aria-label="Contact Seller">
       <style jsx>{`
         .cs-wrap {
-          background: var(--sea, #F8F7EC);
-          border: 1px solid var(--cloud, #E9E9E9);
+          background: var(--sea, #f8f7ec);
+          border: 1px solid var(--cloud, #e9e9e9);
           border-radius: 12px;
           box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
           padding: 16px;
         }
-        .cs-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
-        .cs-title { margin:0; font-family:'Poppins', sans-serif; font-weight:600; letter-spacing:.5px; color:var(--storm,#141B4D); }
-
-        .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:10px; font-weight:700; text-decoration:none; cursor:pointer; user-select:none; border:2px solid var(--storm,#141B4D); background:#fff; color:var(--storm,#141B4D); transition:box-shadow .15s, transform .08s, background .15s, color .15s; }
-        .btn:focus { outline:none; box-shadow:0 0 0 4px var(--tint,#ECF6F4); }
-        .btn:hover { background:var(--storm,#141B4D); color:#fff; }
-        .btn-sm { padding:8px 10px; font-size:.9rem; }
-        .btn-md { padding:10px 14px; font-size:1rem; }
-        .btn-lg { padding:12px 16px; font-size:1.1rem; }
-        .btn.primary { background:var(--teal,#279989); color:#fff; border-color:var(--teal,#279989); }
-        .btn.primary:hover { background:var(--teal-dark,#1E7A6F); border-color:var(--teal-dark,#1E7A6F); color:#fff; }
-
-        .cs-actions { display:flex; flex-wrap:wrap; gap:10px; }
-
-        .cs-tip { margin-top:10px; color:var(--char,#3A3A3A); font-size:.9rem; }
-
-        .empty, .errorMsg {
-          display:flex; gap:8px; align-items:center; padding:10px 12px; border-radius:10px; font-size:.95rem;
+        .cs-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 12px;
         }
-        .empty { background:#fffdf5; border:1px solid #ffe7b3; color:#7a5b00; }
-        .errorMsg { background:#fff5f4; border:1px solid #ffd9d5; color:#8c2f28; }
+        .cs-title {
+          margin: 0;
+          font-family: "Poppins", sans-serif;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+          color: var(--storm, #141b4d);
+        }
+
+        .btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border-radius: 10px;
+          font-weight: 700;
+          text-decoration: none;
+          cursor: pointer;
+          user-select: none;
+          border: 2px solid var(--storm, #141b4d);
+          background: #fff;
+          color: var(--storm, #141b4d);
+          transition: box-shadow 0.15s, transform 0.08s, background 0.15s,
+            color 0.15s;
+        }
+        .btn:focus {
+          outline: none;
+          box-shadow: 0 0 0 4px var(--tint, #ecf6f4);
+        }
+        .btn:hover {
+          background: var(--storm, #141b4d);
+          color: #fff;
+        }
+        .btn-sm {
+          padding: 8px 10px;
+          font-size: 0.9rem;
+        }
+        .btn-md {
+          padding: 10px 14px;
+          font-size: 1rem;
+        }
+        .btn-lg {
+          padding: 12px 16px;
+          font-size: 1.1rem;
+        }
+        .btn.primary {
+          background: var(--teal, #279989);
+          color: #fff;
+          border-color: var(--teal, #279989);
+        }
+        .btn.primary:hover {
+          background: var(--teal-dark, #1e7a6f);
+          border-color: var(--teal-dark, #1e7a6f);
+          color: #fff;
+        }
+
+        .cs-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .cs-tip {
+          margin-top: 10px;
+          color: var(--char, #3a3a3a);
+          font-size: 0.9rem;
+        }
+
+        .empty,
+        .errorMsg {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          padding: 10px 12px;
+          border-radius: 10px;
+          font-size: 0.95rem;
+        }
+        .empty {
+          background: #fffdf5;
+          border: 1px solid #ffe7b3;
+          color: #7a5b00;
+        }
+        .errorMsg {
+          background: #fff5f4;
+          border: 1px solid #ffd9d5;
+          color: #8c2f28;
+        }
       `}</style>
 
       <div className="cs-head">
         <h3 className="cs-title">Contact Seller</h3>
         {showCopy && (
-          <button type="button" className={`btn ${sizeClass}`} onClick={copyToClipboard} aria-label="Copy listing link">
+          <button
+            type="button"
+            className={`btn ${sizeClass}`}
+            onClick={copyToClipboard}
+            aria-label="Copy listing link"
+          >
             <Copy size={16} aria-hidden />
             Copy listing link
           </button>
@@ -166,7 +270,8 @@ export default function ContactSeller({
       {hasContact === false && !contact ? (
         <div className="empty" role="note" aria-live="polite">
           <Info size={16} aria-hidden />
-          The seller hasn’t added public contact info yet. But you can copy the listing link and contact them directly.
+          The seller hasn’t added public contact info yet. But you can copy the
+          listing link and contact them directly.
         </div>
       ) : !contact ? (
         <>
@@ -181,7 +286,7 @@ export default function ContactSeller({
               type="button"
               className={`btn ${sizeClass}`}
               onClick={onReveal}
-              disabled={revealing || !listingId || peeking}  // disable while peeking
+              disabled={revealing || !listingId || peeking} // disable while peeking
               aria-busy={revealing ? "true" : "false"}
               title={peeking ? "Checking seller’s contact…" : undefined}
             >
@@ -199,19 +304,44 @@ export default function ContactSeller({
           {actions.length > 0 ? (
             <>
               <div className="cs-actions">
-                {actions.map((a) => (
-                  <button key={a.key} type="button" onClick={a.onClick} className={`btn ${a.primary ? "primary" : ""} ${sizeClass}`}>
-                    {a.icon}
-                    <span>{a.label}</span>
-                  </button>
-                ))}
+                {actions.map((a) =>
+                  a.isLink ? (
+                    <a
+                      key={a.key}
+                      href={a.href}
+                      target="_blank"
+                      className={`btn ${
+                        a.primary ? "primary" : ""
+                      } ${sizeClass}`}
+                    >
+                      {a.icon}
+                      <span>{a.label}</span>
+                    </a>
+                  ) : (
+                    <button
+                      key={a.key}
+                      type="button"
+                      onClick={a.onClick}
+                      className={`btn ${
+                        a.primary ? "primary" : ""
+                      } ${sizeClass}`}
+                    >
+                      {a.icon}
+                      <span>{a.label}</span>
+                    </button>
+                  )
+                )}
               </div>
-              <p className="cs-tip">Tip: On mobile these open your apps; on desktop they use your default handlers.</p>
+              <p className="cs-tip">
+                Tip: On mobile these open your apps; on desktop they use your
+                default handlers.
+              </p>
             </>
           ) : (
             <div className="empty" role="note" aria-live="polite">
               <Info size={16} aria-hidden />
-              The seller hasn’t added public contact info yet. But you can copy the listing link and contact them directly.
+              The seller hasn’t added public contact info yet. But you can copy
+              the listing link and contact them directly.
             </div>
           )}
         </>
