@@ -26,7 +26,6 @@ export async function getServerSideProps(ctx) {
           return ctx.req.cookies[name];
         },
         set(name, value, options) {
-          // write Set-Cookie header on SSR responses
           const cookie = serialize(name, value, options);
           let existing = ctx.res.getHeader('Set-Cookie') ?? [];
           if (!Array.isArray(existing)) existing = [existing];
@@ -42,7 +41,6 @@ export async function getServerSideProps(ctx) {
     }
   );
 
-  // Revalidating check (recommended for server-side guards)
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data?.user) {
@@ -56,7 +54,7 @@ export async function getServerSideProps(ctx) {
 
   return {
     props: {
-      initialSession: null, // not required with @supabase/ssr, but harmless
+      initialSession: null,
       user: data.user,
     },
   };
@@ -64,14 +62,11 @@ export async function getServerSideProps(ctx) {
 
 function StatusTabs({ value, counts, onChange }) {
   return (
-    <div
-      className="pp-tabs"
-      role="tablist"
-      aria-label="Filter listings by status"
-    >
+    <div className="pp-tabs" role="tablist" aria-label="Filter listings by status">
       {[
         { key: "all", label: "All", count: counts.all },
         { key: "active", label: "Active", count: counts.active },
+        { key: "pending", label: "Pending", count: counts.pending },
         { key: "sold", label: "Sold", count: counts.sold },
       ].map(({ key, label, count }) => {
         const active = value === key;
@@ -135,17 +130,14 @@ function StatusTabs({ value, counts, onChange }) {
   );
 }
 
-function ListingCard({ l, onToggleSold, onDelete }) {
+function ListingCard({ l, onToggleStatus, onDelete }) {
   const price =
     l.price != null && Number.isFinite(Number(l.price))
       ? CAD.format(Number(l.price))
       : null;
 
   return (
-    <article
-      className={`pp-card ${l.is_sold ? "is-sold" : ""}`}
-      role="listitem"
-    >
+    <article className={`pp-card ${l.status === 'sold' ? 'is-sold' : l.status === 'pending' ? 'is-pending' : ''}`} role="listitem">
       <div className="img-wrap">
         {l.image_urls?.length ? (
           <Image
@@ -160,7 +152,8 @@ function ListingCard({ l, onToggleSold, onDelete }) {
         ) : (
           <div className="img placeholder" aria-label="No image" />
         )}
-        {l.is_sold && <div className="soldBanner">SOLD</div>}
+        {l.status === 'sold' && <div className="soldBanner">SOLD</div>}
+        {l.status === 'pending' && <div className="soldBanner">PENDING</div>}
       </div>
 
       <div className="content">
@@ -173,26 +166,22 @@ function ListingCard({ l, onToggleSold, onDelete }) {
         {price && <div className="price">{price}</div>}
 
         <div className="row">
-          <Link
-            href={`/listings/${l.id}`}
-            className="btn btn-outline"
-            aria-label={`View ${l.title}`}
-          >
+          <Link href={`/listings/${l.id}`} className="btn btn-outline" aria-label={`View ${l.title}`}>
             View
           </Link>
-          <Link
-            href={`/listings/${l.id}/edit`}
-            className="btn btn-outline"
-            aria-label={`Edit ${l.title}`}
-          >
+          <Link href={`/listings/${l.id}/edit`} className="btn btn-outline" aria-label={`Edit ${l.title}`}>
             Edit
           </Link>
           <button
             className="btn btn-primary"
-            onClick={() => onToggleSold(l.id, !!l.is_sold)}
-            aria-pressed={l.is_sold}
+            onClick={() => onToggleStatus(l.id, l.status)}
+            aria-pressed={l.status !== 'active'}
           >
-            {l.is_sold ? "Mark Active" : "Mark Sold"}
+            {l.status === 'active'
+              ? "Mark Pending"
+              : l.status === 'pending'
+              ? "Mark Sold"
+              : "Mark Active"}
           </button>
           <button className="btn btn-outline" onClick={() => onDelete(l.id)}>
             Delete
@@ -283,7 +272,7 @@ function ListingCard({ l, onToggleSold, onDelete }) {
 export default function Account({ user }) {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("all"); // all | active | sold
+  const [statusFilter, setStatusFilter] = useState("all"); // all | active | pending | sold
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
@@ -298,13 +287,11 @@ export default function Account({ user }) {
           .select("*")
           .eq("owner", user.id)
           .order("created_at", { ascending: false });
-        if (statusFilter === "active") q = q.eq("is_sold", false);
-        if (statusFilter === "sold") q = q.eq("is_sold", true);
+        if (statusFilter !== "all") q = q.eq("status", statusFilter);
         const { data, error } = await q;
         if (error) throw error;
         if (!cancelled) setListings(data || []);
       } catch (e) {
-        // eslint-disable-next-line no-console
         console.error(e);
         if (!cancelled) {
           setErrorMsg("Failed to load your listings.");
@@ -322,22 +309,27 @@ export default function Account({ user }) {
   const counts = useMemo(
     () => ({
       all: listings.length,
-      active: listings.filter((l) => !l.is_sold).length,
-      sold: listings.filter((l) => !!l.is_sold).length,
+      active: listings.filter((l) => l.status === 'active').length,
+      pending: listings.filter((l) => l.status === 'pending').length,
+      sold: listings.filter((l) => l.status === 'sold').length,
     }),
     [listings]
   );
 
   // Mutations (optimistic)
-  async function toggleSold(id, current) {
+  async function toggleStatus(id, currentStatus) {
     setErrorMsg("");
     const prev = listings;
-    setListings((p) =>
-      p.map((l) => (l.id === id ? { ...l, is_sold: !current } : l))
-    );
+    let nextStatus = 'active';
+    if (currentStatus === 'active') nextStatus = 'pending';
+    else if (currentStatus === 'pending') nextStatus = 'sold';
+    else if (currentStatus === 'sold') nextStatus = 'active';
+
+    setListings((p) => p.map((l) => (l.id === id ? { ...l, status: nextStatus } : l)));
+
     const { error } = await supabase
       .from("discs")
-      .update({ is_sold: !current })
+      .update({ status: nextStatus })
       .eq("id", id);
     if (error) {
       alert("Failed to update: " + error.message);
@@ -346,8 +338,7 @@ export default function Account({ user }) {
   }
 
   async function deleteListing(id) {
-    if (!confirm("Delete this listing permanently? This cannot be undone."))
-      return;
+    if (!confirm("Delete this listing permanently? This cannot be undone.")) return;
     setErrorMsg("");
     const prev = listings;
     setListings((p) => p.filter((l) => l.id !== id));
@@ -362,14 +353,10 @@ export default function Account({ user }) {
     <>
       <Head>
         <title>My Listings — Parked Plastic</title>
-        <meta
-          name="description"
-          content="Manage your disc listings: edit, mark sold, or delete."
-        />
+        <meta name="description" content="Manage your disc listings: edit, mark pending/sold, or delete." />
       </Head>
 
       <main className="pp-wrap">
-        {/* Title + quick actions */}
         <div className="bar">
           <h1 className="pp-title">My Listings</h1>
           <div className="actions">
@@ -379,27 +366,19 @@ export default function Account({ user }) {
           </div>
         </div>
 
-        {/* Contact info settings */}
         <div className="contactCard">
           <ContactInfoCard userId={user.id} />
         </div>
 
-        {/* Tabs */}
         <div className="toolbar">
-          <StatusTabs
-            value={statusFilter}
-            counts={counts}
-            onChange={(v) => setStatusFilter(v)}
-          />
+          <StatusTabs value={statusFilter} counts={counts} onChange={(v) => setStatusFilter(v)} />
         </div>
 
-        {/* Status / errors */}
         <div aria-live="polite" aria-atomic="true" className="statusRegion">
           {errorMsg && <div className="alert error">{errorMsg}</div>}
           {loading && <div className="alert info">Loading your listings…</div>}
         </div>
 
-        {/* Grid */}
         {!loading && listings.length === 0 ? (
           <div className="empty">
             You don’t have any listings yet.
@@ -412,18 +391,12 @@ export default function Account({ user }) {
         ) : (
           <div className="grid" role="list">
             {listings.map((l) => (
-              <ListingCard
-                key={l.id}
-                l={l}
-                onToggleSold={toggleSold}
-                onDelete={deleteListing}
-              />
+              <ListingCard key={l.id} l={l} onToggleStatus={toggleStatus} onDelete={deleteListing} />
             ))}
           </div>
         )}
       </main>
 
-      {/* Minimal page CSS (everything else: tiny globals) */}
       <style jsx>{`
         .bar {
           display: flex;
@@ -487,6 +460,39 @@ export default function Account({ user }) {
             font-size: 2rem;
           }
         }
+
+        /* Pending tint (lighter than Sold) */
+.pp-card.is-pending .img-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(transparent, rgba(232, 176, 46, 0.18)); /* amber glow */
+  pointer-events: none;
+}
+
+/* Shared badge look (optional: you can keep using your existing .soldBanner style) */
+.pendingBanner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 10px 18px;
+  border-radius: 14px;
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #2b1c00;                    /* dark text on light badge */
+  background: rgba(255, 208, 85, .95);/* amber */
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 10px 24px rgba(232, 176, 46, 0.3);
+}
+
+/* (optional) keep images full-color for pending, only grayscale for sold */
+.pp-card.is-sold .img {
+  filter: grayscale(1) brightness(0.82) contrast(1.1);
+  opacity: 0.9;
+}
       `}</style>
     </>
   );

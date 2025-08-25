@@ -13,40 +13,40 @@ import { createServerClient} from "@supabase/ssr";
 const supabase = getSupabaseBrowser();
 
 export async function getServerSideProps(ctx) {
-   const supa = createServerClient(
-     process.env.NEXT_PUBLIC_SUPABASE_URL,
-     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-     {
-       cookies: {
-         get(name) {
-           return ctx.req.cookies[name];
-         },
-         set(name, value, options) {
-           const cookie = serialize(name, value, options);
-           let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-           if (!Array.isArray(existing)) existing = [existing];
-           ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-         },
-         remove(name, options) {
-           const cookie = serialize(name, "", { ...options, maxAge: 0 });
-           let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-           if (!Array.isArray(existing)) existing = [existing];
-           ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-         },
-       },
-     }
-   );
+  const supa = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get(name) {
+          return ctx.req.cookies[name];
+        },
+        set(name, value, options) {
+          const cookie = serialize(name, value, options);
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+        },
+        remove(name, options) {
+          const cookie = serialize(name, "", { ...options, maxAge: 0 });
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+          if (!Array.isArray(existing)) existing = [existing];
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+        },
+      },
+    }
+  );
 
-   const { data: userRes } = await supa.auth.getUser();
-   const user = userRes?.user || null;
+  const { data: userRes } = await supa.auth.getUser();
+  const user = userRes?.user || null;
 
-   return {
-     props: {
-       initialUser: user ? { id: user.id, email: user.email ?? null } : null,
-     },
-   };
- }
+  return {
+    props: {
+      initialUser: user ? { id: user.id, email: user.email ?? null } : null,
+    },
+  };
+}
 
 export default function ListingDetail({ initialUser }) {
   const router = useRouter();
@@ -80,9 +80,6 @@ export default function ListingDetail({ initialUser }) {
   const [reportEmail, setReportEmail] = useState(""); // optional reporter email
   const [reportSending, setReportSending] = useState(false);
   const [reportStatus, setReportStatus] = useState(""); // success/error message
-
-  // Load session (for owner check)
-
 
   // Load listing + seller profile
   useEffect(() => {
@@ -136,9 +133,9 @@ export default function ListingDetail({ initialUser }) {
   }, [id]);
 
   const isOwner = useMemo(
-   () => Boolean(initialUser?.id && disc?.owner && initialUser.id === disc.owner),
-   [initialUser?.id, disc?.owner]
- );
+    () => Boolean(initialUser?.id && disc?.owner && initialUser.id === disc.owner),
+    [initialUser?.id, disc?.owner]
+  );
 
   const priceText = useMemo(() => {
     if (disc?.price == null) return "Contact";
@@ -310,6 +307,10 @@ export default function ListingDetail({ initialUser }) {
     return (disc.description || "").trim() || `${prefix}Disc listing.`;
   })();
 
+  const status = disc.status || "active";
+  const isSold = status === "sold";
+  const isPending = status === "pending";
+
   return (
     <main className="wrap">
       <Head>
@@ -337,7 +338,7 @@ export default function ListingDetail({ initialUser }) {
 
       <section className="top">
         {/* Gallery */}
-        <div className={`gallery ${disc.is_sold ? "sold" : ""}`}>
+        <div className={`gallery ${isSold ? "sold" : isPending ? "pending" : ""}`}>
           <div className="hero">
             {mainImg ? (
               <Image
@@ -352,9 +353,14 @@ export default function ListingDetail({ initialUser }) {
             ) : (
               <PlaceholderDisc className="hero placeholder" />
             )}
-            {disc.is_sold && (
+            {isSold && (
               <div className="soldBanner" aria-label="Sold">
                 SOLD
+              </div>
+            )}
+            {isPending && (
+              <div className="pendingBanner" aria-label="Pending">
+                SALE PENDING
               </div>
             )}
           </div>
@@ -480,7 +486,7 @@ export default function ListingDetail({ initialUser }) {
               </Link>
             ) : (
               <>
-                {!disc.is_sold ? (
+                {!isSold ? (
                   <a
                     className="btn btn-primary"
                     href="#contact"
@@ -492,7 +498,7 @@ export default function ListingDetail({ initialUser }) {
                       }
                     }}
                   >
-                    Contact seller
+                    {isPending ? "Contact seller (pending)" : "Contact seller"}
                   </a>
                 ) : (
                   <button className="btn btn-primary" disabled>
@@ -522,18 +528,18 @@ export default function ListingDetail({ initialUser }) {
         </section>
       ) : null}
 
-      {!isOwner && (
-   <section className="chatwrap" aria-label="Contact" id="contact">
-     <ContactSeller
-       listingId={disc.id}
-       listingTitle={disc.title || "Disc listing"}
-       listingUrl={listingUrl}
-       allowSMS={true}
-       showCopy={true}
-       size="md"
-     />
-   </section>
- )}
+      {!isOwner && status !== "sold" && (
+        <section className="chatwrap" aria-label="Contact" id="contact">
+          <ContactSeller
+            listingId={disc.id}
+            listingTitle={disc.title || "Disc listing"}
+            listingUrl={listingUrl}
+            allowSMS={true}
+            showCopy={true}
+            size="md"
+          />
+        </section>
+      )}
       {reportOpen && (
         <div
           className="modalOverlay"
@@ -753,13 +759,15 @@ const styles = `
   .thumb:focus { outline: none; box-shadow: 0 0 0 4px var(--tint); }
   .thumb.active { border-color: var(--teal); }
 
-  /* SOLD overlay (soft glassy) */
-  .sold .hero::after {
+  /* SOLD/PENDING overlays (soft glassy) */
+  .sold .hero::after,
+  .pending .hero::after {
     content:""; position:absolute; inset:0;
     background: radial-gradient(transparent, rgba(20,27,77,0.22));
     pointer-events:none;
   }
-  .soldBanner {
+  .soldBanner,
+  .pendingBanner {
     position: absolute;
     left: 50%;
     top: 50%;
@@ -836,11 +844,11 @@ const styles = `
   }
 
   .img.placeholder {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
 
   @media (min-width: 768px) {
     .wrap { margin: 32px auto 100px; padding: 0 16px; }

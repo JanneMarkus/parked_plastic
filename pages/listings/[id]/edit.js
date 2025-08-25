@@ -91,7 +91,8 @@ export default function EditListing({ initialUser, initialDisc }) {
   const [price, setPrice] = useState("");
   const [city, setCity] = useState("Thunder Bay");
   const [description, setDescription] = useState("");
-  const [isSold, setIsSold] = useState(false);
+  const [status, setStatus] = useState("active"); // 'active' | 'pending' | 'sold'
+
   // Flight numbers
   const [speed, setSpeed] = useState("");
   const [glide, setGlide] = useState("");
@@ -123,35 +124,37 @@ export default function EditListing({ initialUser, initialDisc }) {
       return String(next);
     });
   }
+
   // Seed from SSR (already authenticated & owner-checked)
   useEffect(() => {
-  // Seed what we have from SSR (already auth+owner-checked server-side)
-  if (initialUser) setUser(initialUser);
-  if (initialDisc) {
-    setDisc(initialDisc);
-  
-    setTitle(initialDisc.title || "");
-    setBrand(initialDisc.brand || "");
-    setMold(initialDisc.mold || "");
-    setPlastic(initialDisc.plastic || "");
-    setConditionScore(initialDisc.condition ?? "");
-    setWeight(initialDisc.weight ?? "");
-    setPrice(initialDisc.price ?? "");
-    setCity(initialDisc.city || "Thunder Bay");
-    setDescription(initialDisc.description || "");
-    setIsSold(!!initialDisc.is_sold);
-  
-    setSpeed(initialDisc.speed ?? "");
-    setGlide(initialDisc.glide ?? "");
-    setTurn(initialDisc.turn ?? "");
-    setFade(initialDisc.fade ?? "");
-    setIsInked(Boolean(initialDisc.is_inked ?? initialDisc.inked ?? false));
-    setIsGlow(Boolean(initialDisc.is_glow ?? false));
-  }
-  
-  // Even if something's missing, drop the spinner so we can render an error or fallback.
-  setLoading(false);
+    // Seed what we have from SSR (already auth+owner-checked server-side)
+    if (initialUser) setUser(initialUser);
+    if (initialDisc) {
+      setDisc(initialDisc);
+    
+      setTitle(initialDisc.title || "");
+      setBrand(initialDisc.brand || "");
+      setMold(initialDisc.mold || "");
+      setPlastic(initialDisc.plastic || "");
+      setConditionScore(initialDisc.condition ?? "");
+      setWeight(initialDisc.weight ?? "");
+      setPrice(initialDisc.price ?? "");
+      setCity(initialDisc.city || "Thunder Bay");
+      setDescription(initialDisc.description || "");
+      setStatus(initialDisc.status || "active");
+    
+      setSpeed(initialDisc.speed ?? "");
+      setGlide(initialDisc.glide ?? "");
+      setTurn(initialDisc.turn ?? "");
+      setFade(initialDisc.fade ?? "");
+      setIsInked(Boolean(initialDisc.is_inked ?? initialDisc.inked ?? false));
+      setIsGlow(Boolean(initialDisc.is_glow ?? false));
+    }
+    
+    // Even if something's missing, drop the spinner so we can render an error or fallback.
+    setLoading(false);
   }, [initialUser, initialDisc]);
+
   function sanitizeTurn() {
     setTurn((prev) => {
       if (prev === "") return prev;
@@ -215,6 +218,9 @@ export default function EditListing({ initialUser, initialDisc }) {
     }
     const condNum = condRaw === null ? null : Math.max(1, Math.min(10, Math.round(condRaw)));
 
+    // Status validation (just in case)
+    const cleanStatus = ["active", "pending", "sold"].includes(status) ? status : "active";
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -230,7 +236,7 @@ export default function EditListing({ initialUser, initialDisc }) {
           city: city.trim() || null,
           description: description.trim() || null,
           image_urls: imageUrls, // from uploader (already uploaded or preserved)
-          is_sold: !!isSold,
+          status: cleanStatus,
           speed: s,
           glide: g,
           turn: t,
@@ -538,17 +544,21 @@ export default function EditListing({ initialUser, initialDisc }) {
               />
             </div>
 
-            {/* Sold toggle */}
-            <div>
-              <label className="checkbox">
-                <input
-                  id="sold"
-                  type="checkbox"
-                  checked={isSold}
-                  onChange={(e) => setIsSold(e.target.checked)}
-                />
-                <span>Mark as sold</span>
-              </label>
+            {/* Status */}
+            <div className="field">
+              <label htmlFor="status">Status</label>
+              <select
+                id="status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                <option value="active">Active</option>
+                <option value="pending">Pending (Pending Sold)</option>
+                <option value="sold">Sold</option>
+              </select>
+              <p className="hintRow">
+                Use <strong>Pending</strong> when a buyer has committed, but the sale isn’t final yet.
+              </p>
             </div>
 
             {/* Actions */}
@@ -597,7 +607,7 @@ const styles = `
   .hint { font-weight: 500; color: #666; font-size: .8rem; margin-left: 6px; }
   .field input:not([type="file"]), .field textarea, .field select { width: 100%; box-sizing: border-box; background: #fff; border: 1px solid var(--cloud); border-radius: 10px; padding: 12px 14px; font-size: 15px; color: var(--char); outline: none; transition: border-color .15s, box-shadow .15s; }
   .field textarea { resize: vertical; min-height: 120px; }
-  .field input:not([type="file"]):focus, .field textarea:focus, .field select:focus { border-color: var(--teal); box-shadow: 0 0 0 4px var(--tint); }
+  .field input:not([type="file"]):focus, .field textarea:focus, .field select:focus { border-color: --teal; box-shadow: 0 0 0 4px var(--tint); }
   .checkbox { display: inline-flex; align-items: center; gap: 10px; user-select: none; font-weight: 600; color: var(--storm); }
   .hintRow { color: #666; font-size: .85rem; margin-top: 6px; }
   .flightGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }

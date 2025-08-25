@@ -95,8 +95,6 @@ function pct(val, min, max) {
   return ((val - min) / (max - min)) * 100;
 }
 
-
-
 /**
  * DualRange — a two-thumb slider that still supports "unset" (empty string) for either side.
  * Props:
@@ -201,72 +199,72 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("");
   // --- Brand autocomplete state & logic (INSIDE Home) ---
-const [brandOpen, setBrandOpen] = useState(false);
-const [brandHighlight, setBrandHighlight] = useState(-1); // keyboard focus index
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [brandHighlight, setBrandHighlight] = useState(-1); // keyboard focus index
 
-const brandSuggestions = useMemo(() => {
-  const q = brand.trim().toLowerCase();
-  if (!q) return [...TOP_13, "Other"];
+  const brandSuggestions = useMemo(() => {
+    const q = brand.trim().toLowerCase();
+    if (!q) return [...TOP_13, "Other"];
 
-  const uniq = (arr) => Array.from(new Set(arr));
+    const uniq = (arr) => Array.from(new Set(arr));
 
-  const starts = TOP_30.filter((b) => b.toLowerCase().startsWith(q));
-  const contains = TOP_30.filter(
-    (b) => !starts.includes(b) && b.toLowerCase().includes(q)
-  );
+    const starts = TOP_30.filter((b) => b.toLowerCase().startsWith(q));
+    const contains = TOP_30.filter(
+      (b) => !starts.includes(b) && b.toLowerCase().includes(q)
+    );
 
-  const topStarts = starts.filter((b) => TOP_13.includes(b));
-  const restStarts = starts.filter((b) => !TOP_13.includes(b));
-  const topContains = contains.filter((b) => TOP_13.includes(b));
-  const restContains = contains.filter((b) => !TOP_13.includes(b));
+    const topStarts = starts.filter((b) => TOP_13.includes(b));
+    const restStarts = starts.filter((b) => !TOP_13.includes(b));
+    const topContains = contains.filter((b) => TOP_13.includes(b));
+    const restContains = contains.filter((b) => !TOP_13.includes(b));
 
-  const results = uniq([
-    ...topStarts,
-    ...restStarts,
-    ...topContains,
-    ...restContains,
-  ]).slice(0, 12);
+    const results = uniq([
+      ...topStarts,
+      ...restStarts,
+      ...topContains,
+      ...restContains,
+    ]).slice(0, 12);
 
-  return [...results, "Other"];
-}, [brand]);
+    return [...results, "Other"];
+  }, [brand]);
 
-const onBrandFocus = () => setBrandOpen(true);
-const onBrandBlur = () => {
-  // close after a tick so click can register
-  setTimeout(() => setBrandOpen(false), 80);
-};
-const chooseBrand = (name) => {
-  if (name === "Other") {
-    setBrand("Other");
-  } else {
-    setBrand(name);
-  }
-  setBrandOpen(false);
-  setBrandHighlight(-1);
-};
-const onBrandKeyDown = (e) => {
-  if (!brandOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-    setBrandOpen(true);
-    return;
-  }
-  if (!brandOpen) return;
-
-  if (e.key === "ArrowDown") {
-    e.preventDefault();
-    setBrandHighlight((i) => Math.min(i + 1, brandSuggestions.length - 1));
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    setBrandHighlight((i) => Math.max(i - 1, 0));
-  } else if (e.key === "Enter") {
-    if (brandHighlight >= 0 && brandHighlight < brandSuggestions.length) {
-      e.preventDefault();
-      chooseBrand(brandSuggestions[brandHighlight]);
+  const onBrandFocus = () => setBrandOpen(true);
+  const onBrandBlur = () => {
+    // close after a tick so click can register
+    setTimeout(() => setBrandOpen(false), 80);
+  };
+  const chooseBrand = (name) => {
+    if (name === "Other") {
+      setBrand("Other");
+    } else {
+      setBrand(name);
     }
-  } else if (e.key === "Escape") {
     setBrandOpen(false);
     setBrandHighlight(-1);
-  }
-};
+  };
+  const onBrandKeyDown = (e) => {
+    if (!brandOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      setBrandOpen(true);
+      return;
+    }
+    if (!brandOpen) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setBrandHighlight((i) => Math.min(i + 1, brandSuggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setBrandHighlight((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      if (brandHighlight >= 0 && brandHighlight < brandSuggestions.length) {
+        e.preventDefault();
+        chooseBrand(brandSuggestions[brandHighlight]);
+      }
+    } else if (e.key === "Escape") {
+      setBrandOpen(false);
+      setBrandHighlight(-1);
+    }
+  };
 
   const [mold, setMold] = useState("");
   const [minCondition, setMinCondition] = useState("");
@@ -302,11 +300,13 @@ const onBrandKeyDown = (e) => {
         let query = supabase
           .from("discs")
           .select(
-            "id,title,brand,mold,weight,condition,price,is_sold,image_urls,created_at,speed,glide,turn,fade,is_inked,is_glow"
+            "id,title,brand,mold,weight,condition,price,status,image_urls,created_at,speed,glide,turn,fade,is_inked,is_glow,plastic,description"
           )
           .order("created_at", { ascending: false });
 
-        if (!includeSold) query = query.eq("is_sold", false);
+        // Status filter: exclude sold unless toggled in
+        if (!includeSold) query = query.neq("status", "sold");
+
         if (onlyGlow) query = query.eq("is_glow", true);
         if (excludeInked) query = query.neq("is_inked", true); // includes NULL + false
 
@@ -325,24 +325,24 @@ const onBrandKeyDown = (e) => {
         }
 
         const brandClean = brand.trim();
-if (brandClean) {
-  if (brandClean.toLowerCase() === "other") {
-    // “Other” = anything NOT in the TOP_30 list
-    // (keeps null/empty brands, which are also “not in top 30”)
-    query = query.not(
-      "brand",
-      "in",
-      `(${TOP_30.map((b) => `"${b.replace(/"/g, '\\"')}"`).join(",")})`
-    );
-  } else {
-    // Normal brand filter (case-insensitive)
-    query = query.ilike("brand", brandClean);
-  }
-}
+        if (brandClean) {
+          if (brandClean.toLowerCase() === "other") {
+            // “Other” = anything NOT in the TOP_30 list
+            // (keeps null/empty brands, which are also “not in top 30”)
+            query = query.not(
+              "brand",
+              "in",
+              `(${TOP_30.map((b) => `"${b.replace(/"/g, '\\"')}"`).join(",")})`
+            );
+          } else {
+            // Normal brand filter (case-insensitive)
+            query = query.ilike("brand", brandClean);
+          }
+        }
 
-if (mold.trim()) {
-  query = query.ilike("mold", mold.trim());
-}
+        if (mold.trim()) {
+          query = query.ilike("mold", mold.trim());
+        }
 
         const minC = minCondition !== "" ? Number(minCondition) : null;
         const maxC = maxCondition !== "" ? Number(maxCondition) : null;
@@ -590,46 +590,46 @@ if (mold.trim()) {
             {showFilters && (
               <div id="filter-grid" className="grid">
                 <div className="pp-field pp-autocomplete">
-  <label htmlFor="brand">Brand</label>
-  <input
-    id="brand"
-    className="pp-input"
-    type="text"
-    value={brand}
-    onChange={(e) => { setBrand(e.target.value); setBrandOpen(true); }}
-    onFocus={onBrandFocus}
-    onBlur={onBrandBlur}
-    onKeyDown={onBrandKeyDown}
-    aria-autocomplete="list"
-    aria-expanded={brandOpen ? "true" : "false"}
-    aria-controls="brand-listbox"
-    placeholder="Innova, Discraft, MVP…"
-    autoComplete="off"
-  />
-  {brandOpen && brandSuggestions.length > 0 && (
-    <ul
-      id="brand-listbox"
-      role="listbox"
-      className="pp-suggest"
-      aria-label="Brand suggestions"
-    >
-      {brandSuggestions.map((name, i) => (
-        <li
-          key={name}
-          role="option"
-          aria-selected={i === brandHighlight}
-          className={`pp-suggest-item ${i === brandHighlight ? "is-active" : ""}`}
-          onMouseDown={(e) => e.preventDefault()}  // keep focus
-          onClick={() => chooseBrand(name)}
-          onMouseEnter={() => setBrandHighlight(i)}
-        >
-          {name}
-          {TOP_13.includes(name)}
-        </li>
-      ))}
-    </ul>
-  )}
-</div>
+                  <label htmlFor="brand">Brand</label>
+                  <input
+                    id="brand"
+                    className="pp-input"
+                    type="text"
+                    value={brand}
+                    onChange={(e) => { setBrand(e.target.value); setBrandOpen(true); }}
+                    onFocus={onBrandFocus}
+                    onBlur={onBrandBlur}
+                    onKeyDown={onBrandKeyDown}
+                    aria-autocomplete="list"
+                    aria-expanded={brandOpen ? "true" : "false"}
+                    aria-controls="brand-listbox"
+                    placeholder="Innova, Discraft, MVP…"
+                    autoComplete="off"
+                  />
+                  {brandOpen && brandSuggestions.length > 0 && (
+                    <ul
+                      id="brand-listbox"
+                      role="listbox"
+                      className="pp-suggest"
+                      aria-label="Brand suggestions"
+                    >
+                      {brandSuggestions.map((name, i) => (
+                        <li
+                          key={name}
+                          role="option"
+                          aria-selected={i === brandHighlight}
+                          className={`pp-suggest-item ${i === brandHighlight ? "is-active" : ""}`}
+                          onMouseDown={(e) => e.preventDefault()}  // keep focus
+                          onClick={() => chooseBrand(name)}
+                          onMouseEnter={() => setBrandHighlight(i)}
+                        >
+                          {name}
+                          {TOP_13.includes(name)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
 
                 <div className="pp-field">
                   <label htmlFor="mold">Mold</label>
@@ -701,34 +701,34 @@ if (mold.trim()) {
                 />
 
                 <div className="pp-field">
-  <label>Price (CAD)</label>
-  <div className="row">
-    <input
-      id="minPrice"
-      className="pp-input"
-      type="number"
-      min={0}
-      step="0.01"
-      placeholder="Min"
-      value={minPrice}
-      onChange={(e) => setMinPrice(e.target.value)}
-      inputMode="decimal"
-      aria-label="Minimum price"
-    />
-    <input
-      id="maxPrice"
-      className="pp-input"
-      type="number"
-      min={0}
-      step="0.01"
-      placeholder="Max"
-      value={maxPrice}
-      onChange={(e) => setMaxPrice(e.target.value)}
-      inputMode="decimal"
-      aria-label="Maximum price"
-    />
-  </div>
-</div>
+                  <label>Price (CAD)</label>
+                  <div className="row">
+                    <input
+                      id="minPrice"
+                      className="pp-input"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="Min"
+                      value={minPrice}
+                      onChange={(e) => setMinPrice(e.target.value)}
+                      inputMode="decimal"
+                      aria-label="Minimum price"
+                    />
+                    <input
+                      id="maxPrice"
+                      className="pp-input"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="Max"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value)}
+                      inputMode="decimal"
+                      aria-label="Maximum price"
+                    />
+                  </div>
+                </div>
 
                 <div className="toggles">
                   <label className="checkbox">
@@ -779,32 +779,36 @@ if (mold.trim()) {
                 ? CAD.format(Number(d.price))
                 : null;
 
+            const isSold = d.status === "sold";
+            const isPending = d.status === "pending";
+
             return (
               <Link
                 href={`/listings/${d.id}`}
                 key={d.id}
-                className={`pp-card listing-card ${d.is_sold ? "is-sold" : ""}`}
+                className={`pp-card listing-card ${isSold ? "is-sold" : isPending ? "is-pending" : ""}`}
                 aria-label={`View ${d.title}`}
                 title={d.title}
                 prefetch={idx < 6}
               >
                 <div className="img-wrap">
                   {hasImage ? (
-  <Image
-    className="img"
-    src={src}
-    alt={d.title}
-    fill
-    placeholder={blurs[src] ? "blur" : undefined}
-    blurDataURL={blurs[src]}
-    sizes="(max-width: 600px) 100vw, (max-width: 1100px) 50vw, 33vw"
-    style={{ objectFit: "cover" }}
-    priority={false}
-  />
-) : (
-  <PlaceholderDisc className="img placeholder" />
-)}
-                  {d.is_sold && <div className="soldBanner">SOLD</div>}
+                    <Image
+                      className="img"
+                      src={src}
+                      alt={d.title}
+                      fill
+                      placeholder={blurs[src] ? "blur" : undefined}
+                      blurDataURL={blurs[src]}
+                      sizes="(max-width: 600px) 100vw, (max-width: 1100px) 50vw, 33vw"
+                      style={{ objectFit: "cover" }}
+                      priority={false}
+                    />
+                  ) : (
+                    <PlaceholderDisc className="img placeholder" />
+                  )}
+                  {isSold && <div className="soldBanner">SOLD</div>}
+                  {isPending && <div className="pendingBanner">PENDING</div>}
                 </div>
 
                 <div className="content">
@@ -884,12 +888,12 @@ if (mold.trim()) {
         }
 
         /* Two-input rows (sliders & ranges) */
-.pp-field .row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 6px;
-}
+        .pp-field .row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          margin-top: 6px;
+        }
 
         .checkbox {
           display: flex;
@@ -942,18 +946,22 @@ if (mold.trim()) {
           transform: scale(1.05);
         }
 
-        .listing-card.is-sold .img {
-          filter: grayscale(1) brightness(0.82) contrast(1.1);
-          opacity: 0.9;
+        /* Sold & pending visual treatments */
+        .listing-card.is-sold .img,
+        .listing-card.is-pending .img {
+          filter: grayscale(1) brightness(0.92) contrast(1.05);
+          opacity: 0.95;
         }
-        .listing-card.is-sold .img-wrap::after {
+        .listing-card.is-sold .img-wrap::after,
+        .listing-card.is-pending .img-wrap::after {
           content: "";
           position: absolute;
           inset: 0;
           background: radial-gradient(transparent, rgba(20, 27, 77, 0.22));
           pointer-events: none;
         }
-        .soldBanner {
+        .soldBanner,
+        .pendingBanner {
           position: absolute;
           left: 50%;
           top: 50%;
@@ -1032,51 +1040,51 @@ if (mold.trim()) {
         }
 
         /* Autocomplete */
-.pp-autocomplete { position: relative; }
-.pp-suggest {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  background: #fff;
-  border: 1px solid var(--cloud);
-  border-radius: 10px;
-  box-shadow: 0 10px 24px rgba(0,0,0,.08);
-  padding: 6px;
-  max-height: 280px;
-  overflow: auto;
-}
-.pp-suggest-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  user-select: none;
-  font-size: 14px;
-}
-.pp-suggest-item:hover,
-.pp-suggest-item.is-active {
-  background: #f7fbfa;
-}
-.pp-suggest .pill {
-  font-size: 11px;
-  border: 1px solid var(--cloud);
-  padding: 2px 6px;
-  border-radius: 999px;
-  color: var(--storm);
-  background: #fff;
-}
+        .pp-autocomplete { position: relative; }
+        .pp-suggest {
+          position: absolute;
+          z-index: 40;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          background: #fff;
+          border: 1px solid var(--cloud);
+          border-radius: 10px;
+          box-shadow: 0 10px 24px rgba(0,0,0,.08);
+          padding: 6px;
+          max-height: 280px;
+          overflow: auto;
+        }
+        .pp-suggest-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 10px;
+          border-radius: 8px;
+          cursor: pointer;
+          user-select: none;
+          font-size: 14px;
+        }
+        .pp-suggest-item:hover,
+        .pp-suggest-item.is-active {
+          background: #f7fbfa;
+        }
+        .pp-suggest .pill {
+          font-size: 11px;
+          border: 1px solid var(--cloud);
+          padding: 2px 6px;
+          border-radius: 999px;
+          color: var(--storm);
+          background: #fff;
+        }
 
-.img.placeholder {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
+        .img.placeholder {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }
       `}</style>
     </>
   );
