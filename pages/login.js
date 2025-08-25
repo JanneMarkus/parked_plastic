@@ -323,7 +323,6 @@ export default function Login({ initialRedirect = "/" }) {
                 onChange={(e) => setEmail(e.target.value)}
                 aria-describedby="email-help"
               />
-              <div id="email-help" className="hint">We’ll never share your email.</div>
 
               {mode !== "forgot" && (
                 <>
