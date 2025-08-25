@@ -7,16 +7,53 @@ import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ContactSeller from "@/components/ContactSeller";
 import PlaceholderDisc from "@/components/PlaceholderDisc";
+import { serialize } from "cookie";
+import { createServerClient} from "@supabase/ssr";
 
 const supabase = getSupabaseBrowser();
 
-export default function ListingDetail() {
+export async function getServerSideProps(ctx) {
+   const supa = createServerClient(
+     process.env.NEXT_PUBLIC_SUPABASE_URL,
+     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+     {
+       cookies: {
+         get(name) {
+           return ctx.req.cookies[name];
+         },
+         set(name, value, options) {
+           const cookie = serialize(name, value, options);
+           let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+           if (!Array.isArray(existing)) existing = [existing];
+           ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+         },
+         remove(name, options) {
+           const cookie = serialize(name, "", { ...options, maxAge: 0 });
+           let existing = ctx.res.getHeader("Set-Cookie") ?? [];
+           if (!Array.isArray(existing)) existing = [existing];
+           ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
+         },
+       },
+     }
+   );
+
+   const { data: userRes } = await supa.auth.getUser();
+   const user = userRes?.user || null;
+
+   return {
+     props: {
+       initialUser: user ? { id: user.id, email: user.email ?? null } : null,
+     },
+   };
+ }
+
+export default function ListingDetail({ initialUser }) {
   const router = useRouter();
   const { id } = router.query;
 
   const [disc, setDisc] = useState(null);
   const [seller, setSeller] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [mainIdx, setMainIdx] = useState(0);
@@ -45,23 +82,7 @@ export default function ListingDetail() {
   const [reportStatus, setReportStatus] = useState(""); // success/error message
 
   // Load session (for owner check)
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setCurrentUser(data?.session?.user ?? null);
-    })();
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_e, session) => {
-      setCurrentUser(session?.user ?? null);
-    });
-    return () => {
-      subscription?.unsubscribe?.();
-      mounted = false;
-    };
-  }, []);
+
 
   // Load listing + seller profile
   useEffect(() => {
@@ -115,9 +136,9 @@ export default function ListingDetail() {
   }, [id]);
 
   const isOwner = useMemo(
-    () => !!(currentUser?.id && disc?.owner && currentUser.id === disc.owner),
-    [currentUser?.id, disc?.owner]
-  );
+   () => Boolean(initialUser?.id && disc?.owner && initialUser.id === disc.owner),
+   [initialUser?.id, disc?.owner]
+ );
 
   const priceText = useMemo(() => {
     if (disc?.price == null) return "Contact";
@@ -308,7 +329,7 @@ export default function ListingDetail() {
           ← Back to Browse
         </Link>
         {isOwner && (
-          <Link href={editUrl} className="btn btn-outline">
+          <Link href={"/account"} className="btn btn-outline">
             Manage my listings
           </Link>
         )}
@@ -402,7 +423,8 @@ export default function ListingDetail() {
                 Condition (
                 <a
                   target="_blank"
-                  rel="noopener noreferrer" href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
+                  rel="noopener noreferrer"
+                  href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
                 >
                   Sleepy Scale
                 </a>
@@ -481,12 +503,12 @@ export default function ListingDetail() {
                   Back to listings
                 </Link>
                 <button
-  type="button"
-  className="btn btn-coral"
-  onClick={() => setReportOpen(true)}
->
-  Report listing
-</button>
+                  type="button"
+                  className="btn btn-coral"
+                  onClick={() => setReportOpen(true)}
+                >
+                  Report listing
+                </button>
               </>
             )}
           </div>
@@ -500,20 +522,18 @@ export default function ListingDetail() {
         </section>
       ) : null}
 
-      <section className="chatwrap" aria-label="Contact" id="contact">
-        <ContactSeller
-          listingTitle={disc.title || "Disc listing"}
-          listingUrl={listingUrl}
-          seller={{
-            phone: seller?.phone || "",
-            public_email: seller?.public_email || "",
-            messenger: seller?.messenger || "",
-          }}
-          allowSMS={true}
-          showCopy={true}
-          size="md"
-        />
-      </section>
+      {!isOwner && (
+   <section className="chatwrap" aria-label="Contact" id="contact">
+     <ContactSeller
+       listingId={disc.id}
+       listingTitle={disc.title || "Disc listing"}
+       listingUrl={listingUrl}
+       allowSMS={true}
+       showCopy={true}
+       size="md"
+     />
+   </section>
+ )}
       {reportOpen && (
         <div
           className="modalOverlay"
