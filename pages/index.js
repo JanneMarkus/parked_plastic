@@ -938,6 +938,7 @@ export default function Home() {
           aspect-ratio: 4 / 3;
           overflow: hidden;
           background: var(--cloud);
+          border-radius: var(--radius)  var(--radius) 0 0;
         }
         .img {
           transition: transform 0.25s ease;

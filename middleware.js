@@ -1,13 +1,10 @@
-// middleware.js
-import { updateSession } from './utils/supabase/middleware';
+// middleware.js (at project root)
+export { updateSession as middleware } from "./utils/supabase/middleware";
 
-export async function middleware(request) {
-  return updateSession(request);
-}
-
-// let it run for everything except static assets/images, tweak as you like
+// Optionally scope where it runs (add/remove paths as you like)
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // run on all app routes that may read auth cookies (tune as you wish)
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
   ],
 };

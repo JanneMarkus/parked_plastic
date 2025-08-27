@@ -86,6 +86,21 @@ export default function Login({ initialRedirect = "/" }) {
   const [resending, setResending] = useState(false);
   const [canResendConfirm, setCanResendConfirm] = useState(false);
 
+  // Escape hatch for stale/broken sessions
+  async function hardResetSession(redirectPath = null) {
+    try {
+      // clear client state + local storage
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+      // clear httpOnly cookies (server-side) if you added the API route
+      await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
+    } finally {
+      const dest =
+        redirectPath ??
+        (typeof window !== "undefined" ? `/login?redirect=${encodeURIComponent(nextPath)}` : "/login");
+      if (typeof window !== "undefined") window.location.replace(dest);
+    }
+  }
+
   // Lightweight “already signed in?” client check (SSR already redirected most cases)
   useEffect(() => {
     let active = true;
@@ -101,8 +116,15 @@ export default function Login({ initialRedirect = "/" }) {
         if (active) setChecking(false);
       }
     })();
+
+    // keep UI in sync if auth state changes in another tab
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSignedInUser(session?.user ?? null);
+    });
+
     return () => {
       active = false;
+      sub?.subscription?.unsubscribe?.();
     };
   }, []);
 
@@ -137,6 +159,12 @@ export default function Login({ initialRedirect = "/" }) {
       setInfoMsg("Confirmation email re-sent. Check your inbox.");
       setCanResendConfirm(false);
     } catch (e) {
+      const raw = String(e?.message || "");
+      // If auth layer is corrupted, let the user nuke cookies
+      if (/token|jwt|refresh|expired|auth/i.test(raw)) {
+        await hardResetSession();
+        return;
+      }
       setErrorMsg(e?.message || "Couldn’t resend confirmation.");
     } finally {
       setResending(false);
@@ -232,6 +260,11 @@ export default function Login({ initialRedirect = "/" }) {
         msg = "That email is already registered. Try signing in or reset your password.";
         setMode("signin");
       }
+      // If we hit token/cookie corruption, give the nuclear option
+      if (/token|jwt|refresh|expired|auth/i.test(raw)) {
+        await hardResetSession();
+        return;
+      }
       setErrorMsg(msg);
     } finally {
       setSubmitting(false);
@@ -240,7 +273,8 @@ export default function Login({ initialRedirect = "/" }) {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
+      await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
       setSignedInUser(null);
     } catch {}
   };
@@ -276,6 +310,17 @@ export default function Login({ initialRedirect = "/" }) {
           {checking && <div className="info">Checking your session…</div>}
           {infoMsg && <div className="info">{infoMsg}</div>}
           {errorMsg && <div className="error">{errorMsg}</div>}
+          {/* Escape hatch visible when there’s trouble */}
+          <div className="troubleRow">
+            <button
+              type="button"
+              className="linklike"
+              onClick={() => hardResetSession()}
+              title="Clears auth cookies and local session"
+            >
+              Having trouble? Reset session
+            </button>
+          </div>
         </div>
 
         {signedInUser ? (
@@ -460,6 +505,8 @@ const styles = `
   }
   .info { background: #f4fff9; border: 1px solid #d1f5e5; color: #1a6a58; }
   .error { background: #fff5f4; border: 1px solid #ffd9d5; color: #8c2f28; }
+
+  .troubleRow { margin-top: 8px; text-align: center; }
 
   /* Prevent 100%-width inputs from spilling past the card */
   .form { display: grid; gap: 10px; margin-top: 8px; min-width: 0; }

@@ -34,6 +34,7 @@ export async function getServerSideProps(ctx) {
     }
   );
 
+  // Refresh cookies/session if needed
   const { data: userRes } = await supa.auth.getUser();
   const user = userRes?.user || null;
 
@@ -64,7 +65,7 @@ export async function getServerSideProps(ctx) {
       redirect: { destination: `/listings/${id}`, permanent: false },
     };
   }
-  
+
   return {
     props: {
       initialUser: { id: user.id, email: user.email ?? null },
@@ -75,11 +76,11 @@ export async function getServerSideProps(ctx) {
 
 export default function EditListing({ initialUser, initialDisc }) {
   const router = useRouter();
-  
+
   // Gate & fetch
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Listing & form state
   const [disc, setDisc] = useState(null);
   const [title, setTitle] = useState("");
@@ -100,18 +101,21 @@ export default function EditListing({ initialUser, initialDisc }) {
   const [fade, setFade] = useState("");
   const [isInked, setIsInked] = useState(false);
   const [isGlow, setIsGlow] = useState(false);
-  
+
   // New uploader state (child reports here)
   const [imageItems, setImageItems] = useState([]); // from ImageUploader onChange
-  const imageUrls = imageItems.filter((i) => i.status === "done" && i.url).map((i) => i.url);
-  
+
   // UI state
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
-  
+
   // Number helpers for Turn control
-  function toHalfStep(n) { return Math.round(n * 2) / 2; }
-  function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+  function toHalfStep(n) {
+    return Math.round(n * 2) / 2;
+  }
+  function clamp(val, min, max) {
+    return Math.max(min, Math.min(max, val));
+  }
   function parseLocaleNumber(v) {
     const s = String(v).replace("−", "-").replace(",", ".");
     const n = Number(s);
@@ -127,11 +131,10 @@ export default function EditListing({ initialUser, initialDisc }) {
 
   // Seed from SSR (already authenticated & owner-checked)
   useEffect(() => {
-    // Seed what we have from SSR (already auth+owner-checked server-side)
     if (initialUser) setUser(initialUser);
     if (initialDisc) {
       setDisc(initialDisc);
-    
+
       setTitle(initialDisc.title || "");
       setBrand(initialDisc.brand || "");
       setMold(initialDisc.mold || "");
@@ -142,16 +145,19 @@ export default function EditListing({ initialUser, initialDisc }) {
       setCity(initialDisc.city || "Thunder Bay");
       setDescription(initialDisc.description || "");
       setStatus(initialDisc.status || "active");
-    
+
       setSpeed(initialDisc.speed ?? "");
       setGlide(initialDisc.glide ?? "");
       setTurn(initialDisc.turn ?? "");
       setFade(initialDisc.fade ?? "");
       setIsInked(Boolean(initialDisc.is_inked ?? initialDisc.inked ?? false));
       setIsGlow(Boolean(initialDisc.is_glow ?? false));
+
+      // Pre-hydrate uploader preview items if images exist
+      const existing = (initialDisc.image_urls || []).filter(Boolean).map((url) => ({ url }));
+      if (existing.length) setImageItems(existing);
     }
-    
-    // Even if something's missing, drop the spinner so we can render an error or fallback.
+
     setLoading(false);
   }, [initialUser, initialDisc]);
 
@@ -176,7 +182,7 @@ export default function EditListing({ initialUser, initialDisc }) {
       return;
     }
 
-    // Flight validation (required if missing; always validated for correctness)
+    // Flight validation
     const stepIsValid = (v) =>
       Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
     const numOrNaN = (s) => (s === "" ? NaN : Number(s));
@@ -221,6 +227,14 @@ export default function EditListing({ initialUser, initialDisc }) {
     // Status validation (just in case)
     const cleanStatus = ["active", "pending", "sold"].includes(status) ? status : "active";
 
+    // Keep existing images if user didn't change anything in this session
+    const finalImageUrls =
+      imageItems && imageItems.length
+        ? imageItems
+            .filter((i) => (i.status ? i.status === "done" : true) && i.url)
+            .map((i) => i.url)
+        : disc?.image_urls || [];
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -235,7 +249,7 @@ export default function EditListing({ initialUser, initialDisc }) {
           price: Number.isFinite(priceNum) ? priceNum : null,
           city: city.trim() || null,
           description: description.trim() || null,
-          image_urls: imageUrls, // from uploader (already uploaded or preserved)
+          image_urls: finalImageUrls,
           status: cleanStatus,
           speed: s,
           glide: g,
@@ -251,6 +265,7 @@ export default function EditListing({ initialUser, initialDisc }) {
       alert("Saved!");
       router.push("/account");
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error(err);
       setErrorMsg(err?.message || "Failed to save changes.");
     } finally {
@@ -280,7 +295,7 @@ export default function EditListing({ initialUser, initialDisc }) {
       </main>
     );
   }
-  //user is guaranteed by SSR; no null return needed
+  // user is guaranteed by SSR; no null return needed
 
   return (
     <main className="wrap">
@@ -607,7 +622,7 @@ const styles = `
   .hint { font-weight: 500; color: #666; font-size: .8rem; margin-left: 6px; }
   .field input:not([type="file"]), .field textarea, .field select { width: 100%; box-sizing: border-box; background: #fff; border: 1px solid var(--cloud); border-radius: 10px; padding: 12px 14px; font-size: 15px; color: var(--char); outline: none; transition: border-color .15s, box-shadow .15s; }
   .field textarea { resize: vertical; min-height: 120px; }
-  .field input:not([type="file"]):focus, .field textarea:focus, .field select:focus { border-color: --teal; box-shadow: 0 0 0 4px var(--tint); }
+  .field input:not([type="file"]):focus, .field textarea:focus, .field select:focus { border-color: var(--teal); box-shadow: 0 0 0 4px var(--tint); }
   .checkbox { display: inline-flex; align-items: center; gap: 10px; user-select: none; font-weight: 600; color: var(--storm); }
   .hintRow { color: #666; font-size: .85rem; margin-top: 6px; }
   .flightGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }

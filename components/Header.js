@@ -19,39 +19,61 @@ export default function Header() {
     let mounted = true;
 
     async function readUserAndProfile() {
-      const { data } = await supabase.auth.getSession();
-      const u = data?.session?.user ?? null;
-      if (!mounted) return;
+      try {
+        const { data } = await supabase.auth.getSession();
+        const u = data?.session?.user ?? null;
+        if (!mounted) return;
 
-      setUser(u);
+        setUser(u);
 
-      if (u) {
-        const { data: p } = await supabase
-          .from("profiles")
-          .select("full_name, avatar_url")
-          .eq("id", u.id)
-          .maybeSingle();
-        setProfile({
-          full_name:
-            p?.full_name ||
-            u.user_metadata?.full_name ||
-            u.user_metadata?.name ||
-            (typeof u.email === "string" ? u.email.split("@")[0] : null) ||
-            null,
-          avatar_url: p?.avatar_url || u.user_metadata?.avatar_url || null,
-        });
-      } else {
-        setProfile({ full_name: null, avatar_url: null });
+        if (u) {
+          const { data: p } = await supabase
+            .from("profiles")
+            .select("full_name, avatar_url")
+            .eq("id", u.id)
+            .maybeSingle();
+
+          setProfile({
+            full_name:
+              p?.full_name ||
+              u.user_metadata?.full_name ||
+              u.user_metadata?.name ||
+              (typeof u.email === "string" ? u.email.split("@")[0] : null) ||
+              null,
+            avatar_url: p?.avatar_url || u.user_metadata?.avatar_url || null,
+          });
+        } else {
+          setProfile({ full_name: null, avatar_url: null });
+        }
+      } catch {
+        // fall back to signed-out UI
+        if (mounted) {
+          setUser(null);
+          setProfile({ full_name: null, avatar_url: null });
+        }
       }
     }
 
     readUserAndProfile();
 
+    // Keep SSR cookies in sync with client auth state
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       const u = session?.user ?? null;
       setUser(u);
+
+      try {
+        await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ event, session }),
+        });
+      } catch {
+        // ignore network hiccups
+      }
+
       if (u) {
         const { data: p } = await supabase
           .from("profiles")
@@ -61,20 +83,40 @@ export default function Header() {
         setProfile({
           full_name:
             p?.full_name ||
-            u.user_metadata?.full_name ||
-            u.user_metadata?.name ||
-            (typeof u.email === "string" ? u.email.split("@")[0] : null) ||
+            u?.user_metadata?.full_name ||
+            u?.user_metadata?.name ||
+            (typeof u?.email === "string" ? u.email.split("@")[0] : null) ||
             null,
-          avatar_url: p?.avatar_url || u.user_metadata?.avatar_url || null,
+          avatar_url: p?.avatar_url || u?.user_metadata?.avatar_url || null,
         });
       } else {
         setProfile({ full_name: null, avatar_url: null });
       }
     });
 
+    // When a long-idle tab regains focus, try to refresh; if it fails, clear both sides.
+    const onVis = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          await supabase.auth.refreshSession().catch(() => {});
+        } else {
+          // no client session — ensure SSR cookies are cleared too
+          await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
+        }
+      } catch {
+        // Hard clear local session on unexpected errors
+        await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+        await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+
     return () => {
       mounted = false;
       subscription?.unsubscribe?.();
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 
@@ -122,10 +164,19 @@ export default function Header() {
     else router.push(`/login?redirect=${encodeURIComponent("/account")}`);
   }
 
+  // Resilient "force sign out": clears local session AND server cookies and reloads cleanly
   async function handleSignOut() {
-    await supabase.auth.signOut();
-    setMenuOpen(false);
-    router.push("/");
+    try {
+      // Clear local (even if network is down)
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+      // Clear server httpOnly cookies used by SSR
+      await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
+    } finally {
+      setMenuOpen(false);
+      // Full reload to avoid any hydration drift
+      if (typeof window !== "undefined") window.location.replace("/login");
+      else router.push("/login");
+    }
   }
 
   return (
@@ -139,8 +190,12 @@ export default function Header() {
 
       {/* Center nav (desktop only) */}
       <nav className="center" aria-label="Primary">
-        <button className="linkButton navLink" onClick={handleBrowseClick}>Browse</button>
-        <button className="linkButton navLink" onClick={handleManageClick}>Manage Listings</button>
+        <button className="linkButton navLink" onClick={handleBrowseClick}>
+          Browse
+        </button>
+        <button className="linkButton navLink" onClick={handleManageClick}>
+          Manage Listings
+        </button>
       </nav>
 
       {/* Mobile CTA sits in the middle row on small screens */}
@@ -151,7 +206,9 @@ export default function Header() {
       {/* Right cluster */}
       <div className="right">
         {/* Desktop CTA */}
-        <button className="btnPrimary desktopCTA" onClick={handlePostClick}>Post a Disc</button>
+        <button className="btnPrimary desktopCTA" onClick={handlePostClick}>
+          Post a Disc
+        </button>
 
         {user ? (
           <div className="account">
@@ -163,6 +220,7 @@ export default function Header() {
               title={`${displayName} — Manage Listings`}
             >
               {profile.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={profile.avatar_url}
                   alt=""
@@ -181,10 +239,14 @@ export default function Header() {
               <div className="whoHint">Signed in as</div>
               <div className="whoName">{displayName}</div>
             </div>
-            <button className="btnOutline" onClick={handleSignOut}>Sign out</button>
+            <button className="btnOutline" onClick={handleSignOut}>
+              Sign out
+            </button>
           </div>
         ) : (
-          <Link href="/login" className="btnOutline desktopOnly">Sign in</Link>
+          <Link href="/login" className="btnOutline desktopOnly">
+            Sign in
+          </Link>
         )}
 
         {/* Hamburger (mobile only) */}
@@ -230,6 +292,7 @@ export default function Header() {
                   title={`${displayName} — Manage Listings`}
                 >
                   {profile.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={profile.avatar_url}
                       alt=""
@@ -287,11 +350,14 @@ export default function Header() {
           align-items: center;
           gap: 10px;
           padding: 0 10px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
           font-family: var(--font-poppins, Poppins), system-ui, sans-serif;
         }
 
-        .left { display: flex; align-items: center; }
+        .left {
+          display: flex;
+          align-items: center;
+        }
         .logoLink {
           display: inline-flex;
           align-items: center;
@@ -306,7 +372,9 @@ export default function Header() {
         }
 
         /* Center nav hidden on mobile; we repurpose the middle slot for mobile CTA */
-        .center { display: none; }
+        .center {
+          display: none;
+        }
 
         /* MOBILE CTA (visible <768px, sits in the middle column) */
         .mobileCTA {
@@ -320,7 +388,9 @@ export default function Header() {
           cursor: pointer;
           white-space: nowrap;
         }
-        .mobileCTA:hover { background: #1e7a6f; }
+        .mobileCTA:hover {
+          background: #1e7a6f;
+        }
         .mobileCTA:focus-visible {
           outline: none;
           box-shadow: 0 0 0 4px var(--light-teal-tint);
@@ -335,7 +405,9 @@ export default function Header() {
         }
 
         /* Desktop CTA hidden on mobile */
-        .desktopCTA { display: none; }
+        .desktopCTA {
+          display: none;
+        }
 
         /* Buttons (shared) */
         .btnPrimary {
@@ -348,7 +420,9 @@ export default function Header() {
           cursor: pointer;
           white-space: nowrap;
         }
-        .btnPrimary:hover { background: #1e7a6f; }
+        .btnPrimary:hover {
+          background: #1e7a6f;
+        }
         .btnPrimary:focus-visible {
           outline: none;
           box-shadow: 0 0 0 4px var(--light-teal-tint);
@@ -368,13 +442,20 @@ export default function Header() {
           justify-content: center;
           white-space: nowrap;
         }
-        .btnOutline:hover { background: #fff; color: var(--storm-blue); }
+        .btnOutline:hover {
+          background: #fff;
+          color: var(--storm-blue);
+        }
         .btnOutline:focus-visible {
           outline: none;
           box-shadow: 0 0 0 4px var(--light-teal-tint);
         }
-        .btnOutline.full { width: 100%; }
-        .desktopOnly { display: none; }
+        .btnOutline.full {
+          width: 100%;
+        }
+        .desktopOnly {
+          display: none;
+        }
 
         /* Account cluster (hidden on mobile) */
         .account {
@@ -387,7 +468,7 @@ export default function Header() {
           height: 36px;
           border-radius: 50%;
           object-fit: cover;
-          border: 2px solid rgba(255,255,255,0.5);
+          border: 2px solid rgba(255, 255, 255, 0.5);
           background: var(--caribbean-sea);
           flex: 0 0 auto;
         }
@@ -413,9 +494,17 @@ export default function Header() {
           outline: none;
           box-shadow: 0 0 0 4px var(--light-teal-tint);
         }
-        .who { line-height: 1.1; }
-        .whoHint { font-size: 11px; opacity: 0.7; }
-        .whoName { font-size: 14px; font-weight: 600; }
+        .who {
+          line-height: 1.1;
+        }
+        .whoHint {
+          font-size: 11px;
+          opacity: 0.7;
+        }
+        .whoName {
+          font-size: 14px;
+          font-weight: 600;
+        }
 
         /* Hamburger (mobile only) */
         .hamburger {
@@ -424,7 +513,7 @@ export default function Header() {
           gap: 3px;
           padding: 8px;
           border-radius: 8px;
-          border: 1px solid rgba(255,255,255,0.2);
+          border: 1px solid rgba(255, 255, 255, 0.2);
           background: transparent;
           cursor: pointer;
         }
@@ -450,7 +539,9 @@ export default function Header() {
           border-top: 1px solid var(--cloud-grey);
         }
         @media (prefers-reduced-motion: reduce) {
-          .mobileMenu { transition: none; }
+          .mobileMenu {
+            transition: none;
+          }
         }
         .mobileMenu.open {
           transform: translateY(0);
@@ -470,8 +561,13 @@ export default function Header() {
         .mobileInner {
           color: var(--storm-blue);
         }
-        .mobileUser .whoHint { color: var(--soft-charcoal); opacity: 0.9; }
-        .mobileUser .whoName { color: var(--storm-blue); }
+        .mobileUser .whoHint {
+          color: var(--soft-charcoal);
+          opacity: 0.9;
+        }
+        .mobileUser .whoName {
+          color: var(--storm-blue);
+        }
 
         /* Mobile links and buttons inside sheet */
         .mobileLink {
@@ -486,7 +582,9 @@ export default function Header() {
           border: 1px solid var(--cloud-grey);
           background: #fff;
         }
-        .mobileLink:hover { background: #fdfdfb; }
+        .mobileLink:hover {
+          background: #fdfdfb;
+        }
 
         .mobileLink.asButton {
           cursor: pointer;
@@ -522,7 +620,9 @@ export default function Header() {
           gap: 10px;
           padding: 6px 0 12px;
         }
-        .mobileWho .whoName { font-size: 15px; }
+        .mobileWho .whoName {
+          font-size: 15px;
+        }
 
         /* DESKTOP ≥768px */
         @media (min-width: 768px) {
@@ -542,7 +642,9 @@ export default function Header() {
             text-decoration: none;
             outline: none;
           }
-          .navLink:hover { text-decoration: underline; }
+          .navLink:hover {
+            text-decoration: underline;
+          }
           .navLink:focus-visible {
             box-shadow: 0 0 0 4px var(--light-teal-tint);
             border-radius: 6px;
@@ -556,12 +658,24 @@ export default function Header() {
             color: inherit;
           }
 
-          .account { display: inline-flex; }
-          .desktopCTA { display: inline-flex; }
-          .desktopOnly { display: inline-flex; }
-          .mobileCTA { display: none; }
-          .hamburger { display: none; }
-          .mobileMenu { display: none; }
+          .account {
+            display: inline-flex;
+          }
+          .desktopCTA {
+            display: inline-flex;
+          }
+          .desktopOnly {
+            display: inline-flex;
+          }
+          .mobileCTA {
+            display: none;
+          }
+          .hamburger {
+            display: none;
+          }
+          .mobileMenu {
+            display: none;
+          }
         }
       `}</style>
     </header>

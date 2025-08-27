@@ -1,30 +1,36 @@
 // utils/supabase/middleware.js
-import { createServerClient } from '@supabase/ssr'
-import { NextResponse } from 'next/server'
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse } from "next/server";
 
 export async function updateSession(request) {
-  let response = NextResponse.next({ request })
+  // Always reply with a mutable response so we can set cookies.
+  const response = NextResponse.next();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    // Use the public ANON key consistently for SSR
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
         get(name) {
-          return request.cookies.get(name)?.value
+          return request.cookies.get(name)?.value;
         },
         set(name, value, options) {
-          response.cookies.set({ name, value, ...options })
+          response.cookies.set({ name, value, ...options });
         },
         remove(name, options) {
-          response.cookies.set({ name, value: '', ...options, maxAge: 0 })
+          response.cookies.set({ name, value: "", ...options, maxAge: 0 });
         },
       },
     }
-  )
+  );
 
-  // refresh cookies if needed
-  await supabase.auth.getUser()
+  // Touch auth to refresh cookies if needed. Ignore errors to avoid blocking navigation.
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // no-op
+  }
 
-  return response
+  return response;
 }

@@ -3,13 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
-import { getSupabaseBrowser } from '@/lib/supabaseBrowser'
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ContactInfoCard from "@/components/ContactInfoCard";
 import { createServerClient } from "@supabase/ssr";
 import { serialize } from "cookie";
 
 /* ------------------------- Small helpers/components ------------------------ */
-const supabase = getSupabaseBrowser()
+const supabase = getSupabaseBrowser();
 
 const CAD = new Intl.NumberFormat("en-CA", {
   style: "currency",
@@ -27,15 +27,15 @@ export async function getServerSideProps(ctx) {
         },
         set(name, value, options) {
           const cookie = serialize(name, value, options);
-          let existing = ctx.res.getHeader('Set-Cookie') ?? [];
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
           if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader('Set-Cookie', [...existing, cookie]);
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
         },
         remove(name, options) {
-          const cookie = serialize(name, '', { ...options, maxAge: 0 });
-          let existing = ctx.res.getHeader('Set-Cookie') ?? [];
+          const cookie = serialize(name, "", { ...options, maxAge: 0 });
+          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
           if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader('Set-Cookie', [...existing, cookie]);
+          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
         },
       },
     }
@@ -137,7 +137,12 @@ function ListingCard({ l, onToggleStatus, onDelete }) {
       : null;
 
   return (
-    <article className={`pp-card ${l.status === 'sold' ? 'is-sold' : l.status === 'pending' ? 'is-pending' : ''}`} role="listitem">
+    <article
+      className={`pp-card ${
+        l.status === "sold" ? "is-sold" : l.status === "pending" ? "is-pending" : ""
+      }`}
+      role="listitem"
+    >
       <div className="img-wrap">
         {l.image_urls?.length ? (
           <Image
@@ -152,8 +157,8 @@ function ListingCard({ l, onToggleStatus, onDelete }) {
         ) : (
           <div className="img placeholder" aria-label="No image" />
         )}
-        {l.status === 'sold' && <div className="soldBanner">SOLD</div>}
-        {l.status === 'pending' && <div className="soldBanner">PENDING</div>}
+        {l.status === "sold" && <div className="soldBanner">SOLD</div>}
+        {l.status === "pending" && <div className="pendingBanner">PENDING</div>}
       </div>
 
       <div className="content">
@@ -175,11 +180,11 @@ function ListingCard({ l, onToggleStatus, onDelete }) {
           <button
             className="btn btn-primary"
             onClick={() => onToggleStatus(l.id, l.status)}
-            aria-pressed={l.status !== 'active'}
+            aria-pressed={l.status !== "active"}
           >
-            {l.status === 'active'
+            {l.status === "active"
               ? "Mark Pending"
-              : l.status === 'pending'
+              : l.status === "pending"
               ? "Mark Sold"
               : "Mark Active"}
           </button>
@@ -275,6 +280,19 @@ export default function Account({ user }) {
   const [statusFilter, setStatusFilter] = useState("all"); // all | active | pending | sold
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Centralized stale-session escape hatch
+  async function handleAuthStaleRedirect() {
+    try {
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+      await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
+    } finally {
+      if (typeof window !== "undefined") {
+        const redirect = encodeURIComponent(window.location.pathname);
+        window.location.replace(`/login?redirect=${redirect}`);
+      }
+    }
+  }
+
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
@@ -292,7 +310,18 @@ export default function Account({ user }) {
         if (error) throw error;
         if (!cancelled) setListings(data || []);
       } catch (e) {
+        // eslint-disable-next-line no-console
         console.error(e);
+        const msg = String(e?.message || "");
+        const code = e?.code || e?.status;
+        // If auth looks stale/broken, hard reset to login
+        if (
+          code === 401 ||
+          /JWT|Auth|Invalid token|refresh|expired/i.test(msg)
+        ) {
+          await handleAuthStaleRedirect();
+          return;
+        }
         if (!cancelled) {
           setErrorMsg("Failed to load your listings.");
           setListings([]);
@@ -309,9 +338,9 @@ export default function Account({ user }) {
   const counts = useMemo(
     () => ({
       all: listings.length,
-      active: listings.filter((l) => l.status === 'active').length,
-      pending: listings.filter((l) => l.status === 'pending').length,
-      sold: listings.filter((l) => l.status === 'sold').length,
+      active: listings.filter((l) => l.status === "active").length,
+      pending: listings.filter((l) => l.status === "pending").length,
+      sold: listings.filter((l) => l.status === "sold").length,
     }),
     [listings]
   );
@@ -320,18 +349,20 @@ export default function Account({ user }) {
   async function toggleStatus(id, currentStatus) {
     setErrorMsg("");
     const prev = listings;
-    let nextStatus = 'active';
-    if (currentStatus === 'active') nextStatus = 'pending';
-    else if (currentStatus === 'pending') nextStatus = 'sold';
-    else if (currentStatus === 'sold') nextStatus = 'active';
+    let nextStatus = "active";
+    if (currentStatus === "active") nextStatus = "pending";
+    else if (currentStatus === "pending") nextStatus = "sold";
+    else if (currentStatus === "sold") nextStatus = "active";
 
     setListings((p) => p.map((l) => (l.id === id ? { ...l, status: nextStatus } : l)));
-
-    const { error } = await supabase
-      .from("discs")
-      .update({ status: nextStatus })
-      .eq("id", id);
+    const { error } = await supabase.from("discs").update({ status: nextStatus }).eq("id", id);
     if (error) {
+      const msg = String(error?.message || "");
+      const code = error?.code || error?.status;
+      if (code === 401 || /JWT|Auth|Invalid token|refresh|expired/i.test(msg)) {
+        await handleAuthStaleRedirect();
+        return;
+      }
       alert("Failed to update: " + error.message);
       setListings(prev); // revert
     }
@@ -344,6 +375,12 @@ export default function Account({ user }) {
     setListings((p) => p.filter((l) => l.id !== id));
     const { error } = await supabase.from("discs").delete().eq("id", id);
     if (error) {
+      const msg = String(error?.message || "");
+      const code = error?.code || error?.status;
+      if (code === 401 || /JWT|Auth|Invalid token|refresh|expired/i.test(msg)) {
+        await handleAuthStaleRedirect();
+        return;
+      }
       alert("Failed to delete: " + error.message);
       setListings(prev); // revert
     }
@@ -353,7 +390,10 @@ export default function Account({ user }) {
     <>
       <Head>
         <title>My Listings — Parked Plastic</title>
-        <meta name="description" content="Manage your disc listings: edit, mark pending/sold, or delete." />
+        <meta
+          name="description"
+          content="Manage your disc listings: edit, mark pending/sold, or delete."
+        />
       </Head>
 
       <main className="pp-wrap">
@@ -462,37 +502,36 @@ export default function Account({ user }) {
         }
 
         /* Pending tint (lighter than Sold) */
-.pp-card.is-pending .img-wrap::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(transparent, rgba(232, 176, 46, 0.18)); /* amber glow */
-  pointer-events: none;
-}
+        .pp-card.is-pending .img-wrap::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(transparent, rgba(232, 176, 46, 0.18));
+          pointer-events: none;
+        }
 
-/* Shared badge look (optional: you can keep using your existing .soldBanner style) */
-.pendingBanner {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  padding: 10px 18px;
-  border-radius: 14px;
-  font-family: "Poppins", sans-serif;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #2b1c00;                    /* dark text on light badge */
-  background: rgba(255, 208, 85, .95);/* amber */
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 10px 24px rgba(232, 176, 46, 0.3);
-}
+        .pendingBanner {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          padding: 10px 18px;
+          border-radius: 14px;
+          font-family: "Poppins", sans-serif;
+          font-weight: 800;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: #2b1c00;
+          background: rgba(255, 208, 85, 0.95);
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          box-shadow: 0 10px 24px rgba(232, 176, 46, 0.3);
+        }
 
-/* (optional) keep images full-color for pending, only grayscale for sold */
-.pp-card.is-sold .img {
-  filter: grayscale(1) brightness(0.82) contrast(1.1);
-  opacity: 0.9;
-}
+        /* Keep grayscale only for sold */
+        .pp-card.is-sold .img {
+          filter: grayscale(1) brightness(0.82) contrast(1.1);
+          opacity: 0.9;
+        }
       `}</style>
     </>
   );
