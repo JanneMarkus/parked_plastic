@@ -175,7 +175,7 @@ export default function Header() {
       setMenuOpen(false);
       // Full reload to avoid any hydration drift
       if (typeof window !== "undefined") window.location.replace("/login");
-      else router.push("/login");
+      else window.location.assign("/");
     }
   }
 

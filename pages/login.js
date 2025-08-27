@@ -193,6 +193,8 @@ export default function Login({ initialRedirect = "/" }) {
           password: cleanPassword,
         });
         if (error) throw error;
+        // Force an immediate sync so the very next SSR request sees the cookies.
+        await supabase.auth.getSession();
         router.replace(nextPath);
         return;
       }
@@ -234,7 +236,9 @@ export default function Login({ initialRedirect = "/" }) {
           setInfoMsg("Check your inbox to confirm your account. After verification, sign in here.");
           setMode("signin");
         } else {
-          router.replace(nextPath);
+          // Force an immediate sync so the very next SSR request sees the cookies.
+          await supabase.auth.getSession();
+          router.replace(nextPath); 
         }
         return;
       }
