@@ -2,12 +2,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { getSupabaseBrowser } from '@/lib/supabaseBrowser'
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { createServerClient } from "@supabase/ssr";
 import { serialize } from "cookie";
 
 /* --------------------------- Shared small helpers -------------------------- */
-const supabase = getSupabaseBrowser()
+const supabase = getSupabaseBrowser();
 
 function sanitizeRedirectPath(raw) {
   if (typeof raw !== "string") return "/";
@@ -22,13 +22,15 @@ const isValidEmail = (v) =>
 /* --------------------------- Server-side redirect -------------------------- */
 export async function getServerSideProps(ctx) {
   // Read & sanitize the redirect target on the server
-  const raw = typeof ctx.query?.redirect === "string" ? ctx.query.redirect : "/";
+  const raw =
+    typeof ctx.query?.redirect === "string" ? ctx.query.redirect : "/";
   const nextPath = sanitizeRedirectPath(raw);
 
   // Wire @supabase/ssr with cookie adapter for Pages Router
   const serverSupabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
         get(name) {
@@ -69,8 +71,13 @@ export async function getServerSideProps(ctx) {
 export default function Login({ initialRedirect = "/" }) {
   const router = useRouter();
   const rawRedirect =
-    typeof router.query.redirect === "string" ? router.query.redirect : initialRedirect;
-  const nextPath = useMemo(() => sanitizeRedirectPath(rawRedirect), [rawRedirect]);
+    typeof router.query.redirect === "string"
+      ? router.query.redirect
+      : initialRedirect;
+  const nextPath = useMemo(
+    () => sanitizeRedirectPath(rawRedirect),
+    [rawRedirect]
+  );
 
   const [checking, setChecking] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -92,11 +99,16 @@ export default function Login({ initialRedirect = "/" }) {
       // clear client state + local storage
       await supabase.auth.signOut({ scope: "local" }).catch(() => {});
       // clear httpOnly cookies (server-side) if you added the API route
-      await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
+      await fetch("/api/auth/clear", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => {});
     } finally {
       const dest =
         redirectPath ??
-        (typeof window !== "undefined" ? `/login?redirect=${encodeURIComponent(nextPath)}` : "/login");
+        (typeof window !== "undefined"
+          ? `/login?redirect=${encodeURIComponent(nextPath)}`
+          : "/login");
       if (typeof window !== "undefined") window.location.replace(dest);
     }
   }
@@ -144,14 +156,17 @@ export default function Login({ initialRedirect = "/" }) {
     setInfoMsg("");
     try {
       const clean = String(targetEmail || email).trim();
-      if (!isValidEmail(clean)) throw new Error("Enter a valid email to resend.");
+      if (!isValidEmail(clean))
+        throw new Error("Enter a valid email to resend.");
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: clean,
         options: {
           emailRedirectTo:
             typeof window !== "undefined" && window.location?.origin
-              ? `${window.location.origin}/login?redirect=${encodeURIComponent(nextPath)}`
+              ? `${window.location.origin}/login?redirect=${encodeURIComponent(
+                  nextPath
+                )}`
               : undefined,
         },
       });
@@ -195,6 +210,11 @@ export default function Login({ initialRedirect = "/" }) {
         if (error) throw error;
         // Force an immediate sync so the very next SSR request sees the cookies.
         await supabase.auth.getSession();
+        await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        }).catch(() => {});
         router.replace(nextPath);
         return;
       }
@@ -214,7 +234,10 @@ export default function Login({ initialRedirect = "/" }) {
         if (error) {
           const raw = String(error?.message || "");
           // Handle “already registered” nicely
-          if (/already registered/i.test(raw) || error?.code === "user_already_registered") {
+          if (
+            /already registered/i.test(raw) ||
+            error?.code === "user_already_registered"
+          ) {
             setMode("signin");
             setInfoMsg(
               "That email is already registered. Sign in below or use “Forgot your password?”."
@@ -222,9 +245,14 @@ export default function Login({ initialRedirect = "/" }) {
             return;
           }
           // If provider says email not confirmed yet, offer a resend
-          if (/email not confirmed/i.test(raw) || error?.code === "email_not_confirmed") {
+          if (
+            /email not confirmed/i.test(raw) ||
+            error?.code === "email_not_confirmed"
+          ) {
             setMode("signin");
-            setInfoMsg("Your email isn’t confirmed yet. We can resend the confirmation email.");
+            setInfoMsg(
+              "Your email isn’t confirmed yet. We can resend the confirmation email."
+            );
             setCanResendConfirm(true);
             return;
           }
@@ -233,35 +261,49 @@ export default function Login({ initialRedirect = "/" }) {
 
         // Confirmations ON → no immediate session; email will be sent.
         if (!data.session) {
-          setInfoMsg("Check your inbox to confirm your account. After verification, sign in here.");
+          setInfoMsg(
+            "Check your inbox to confirm your account. After verification, sign in here."
+          );
           setMode("signin");
         } else {
           // Force an immediate sync so the very next SSR request sees the cookies.
           await supabase.auth.getSession();
-          router.replace(nextPath); 
+          await fetch("/api/auth/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+          }).catch(() => {});
+          router.replace(nextPath);
         }
         return;
       }
 
       if (mode === "forgot") {
-        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: origin != null ? `${origin}/reset-password` : undefined,
-        });
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          cleanEmail,
+          {
+            redirectTo: origin != null ? `${origin}/reset-password` : undefined,
+          }
+        );
         if (error) throw error;
-        setInfoMsg("If that email exists, a password reset link has been sent.");
+        setInfoMsg(
+          "If that email exists, a password reset link has been sent."
+        );
         setMode("signin");
         return;
       }
     } catch (e) {
       const raw = String(e?.message || "");
       let msg = raw || "Something went wrong. Please try again.";
-      if (/Invalid login credentials/i.test(raw)) msg = "Incorrect email or password.";
+      if (/Invalid login credentials/i.test(raw))
+        msg = "Incorrect email or password.";
       if (/Email not confirmed/i.test(raw)) {
         msg = "Please confirm your email before signing in.";
         setCanResendConfirm(true);
       }
       if (/already registered/i.test(raw)) {
-        msg = "That email is already registered. Try signing in or reset your password.";
+        msg =
+          "That email is already registered. Try signing in or reset your password.";
         setMode("signin");
       }
       // If we hit token/cookie corruption, give the nuclear option
@@ -278,7 +320,10 @@ export default function Login({ initialRedirect = "/" }) {
   const signOut = async () => {
     try {
       await supabase.auth.signOut({ scope: "local" });
-      await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
+      await fetch("/api/auth/clear", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => {});
       setSignedInUser(null);
     } catch {}
   };
@@ -286,7 +331,13 @@ export default function Login({ initialRedirect = "/" }) {
   return (
     <main className="wrap">
       <Head>
-        <title>{`${mode === "signup" ? "Create account" : mode === "forgot" ? "Reset password" : "Sign in"} — Parked Plastic`}</title>
+        <title>{`${
+          mode === "signup"
+            ? "Create account"
+            : mode === "forgot"
+            ? "Reset password"
+            : "Sign in"
+        } — Parked Plastic`}</title>
         <meta
           name="description"
           content="Sign in or create an account on Parked Plastic with your email and password."
@@ -306,7 +357,8 @@ export default function Login({ initialRedirect = "/" }) {
         </h1>
 
         <p className="lead">
-          You’ll return to <code className="pill">{nextPath}</code> after authentication.
+          You’ll return to <code className="pill">{nextPath}</code> after
+          authentication.
         </p>
 
         {/* Status */}
@@ -329,8 +381,15 @@ export default function Login({ initialRedirect = "/" }) {
 
         {signedInUser ? (
           <>
-            <div style={{ textAlign: "center", color: "var(--char)", margin: "0 0 12px" }}>
-              You’re signed in as <strong>{signedInUser.email || "your account"}</strong>.
+            <div
+              style={{
+                textAlign: "center",
+                color: "var(--char)",
+                margin: "0 0 12px",
+              }}
+            >
+              You’re signed in as{" "}
+              <strong>{signedInUser.email || "your account"}</strong>.
             </div>
             <div
               style={{
@@ -361,7 +420,9 @@ export default function Login({ initialRedirect = "/" }) {
         ) : (
           <>
             <form onSubmit={onSubmit} className="form">
-              <label className="label" htmlFor="email">Email</label>
+              <label className="label" htmlFor="email">
+                Email
+              </label>
               <input
                 id="email"
                 type="email"
@@ -375,12 +436,16 @@ export default function Login({ initialRedirect = "/" }) {
 
               {mode !== "forgot" && (
                 <>
-                  <label className="label" htmlFor="password">Password</label>
+                  <label className="label" htmlFor="password">
+                    Password
+                  </label>
                   <input
                     id="password"
                     type="password"
                     className="input"
-                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    autoComplete={
+                      mode === "signup" ? "new-password" : "current-password"
+                    }
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -423,12 +488,19 @@ export default function Login({ initialRedirect = "/" }) {
             )}
 
             {/* Mode Switches */}
-            <div className="switches" role="navigation" aria-label="auth options">
+            <div
+              className="switches"
+              role="navigation"
+              aria-label="auth options"
+            >
               {mode !== "signin" && (
                 <button
                   className="linklike"
                   onClick={() => {
-                    setMode("signin"); setErrorMsg(""); setInfoMsg(""); setCanResendConfirm(false);
+                    setMode("signin");
+                    setErrorMsg("");
+                    setInfoMsg("");
+                    setCanResendConfirm(false);
                   }}
                 >
                   Have an account? Sign in
@@ -438,7 +510,10 @@ export default function Login({ initialRedirect = "/" }) {
                 <button
                   className="linklike"
                   onClick={() => {
-                    setMode("signup"); setErrorMsg(""); setInfoMsg(""); setCanResendConfirm(false);
+                    setMode("signup");
+                    setErrorMsg("");
+                    setInfoMsg("");
+                    setCanResendConfirm(false);
                   }}
                 >
                   New here? Create an account
@@ -448,7 +523,10 @@ export default function Login({ initialRedirect = "/" }) {
                 <button
                   className="linklike"
                   onClick={() => {
-                    setMode("forgot"); setErrorMsg(""); setInfoMsg(""); setCanResendConfirm(false);
+                    setMode("forgot");
+                    setErrorMsg("");
+                    setInfoMsg("");
+                    setCanResendConfirm(false);
                   }}
                 >
                   Forgot your password?

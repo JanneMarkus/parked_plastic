@@ -1,42 +1,32 @@
 // pages/api/auth/clear.js
 import { createServerClient } from "@supabase/ssr";
+import { serialize } from "cookie";
 
 export default async function handler(req, res) {
   try {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         cookies: {
           get(name) {
             return req.cookies[name];
           },
           set(name, value, options) {
-            // set a clearing cookie
-            res.setHeader("Set-Cookie", [
-              ...(Array.isArray(res.getHeader("Set-Cookie"))
-                ? res.getHeader("Set-Cookie")
-                : res.getHeader("Set-Cookie")
-                ? [res.getHeader("Set-Cookie")]
-                : []),
-              `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-            ]);
+            const prev = res.getHeader("Set-Cookie");
+            const next = serialize(name, value, options);
+            res.setHeader("Set-Cookie", prev ? [].concat(prev, next) : [next]);
           },
           remove(name, options) {
-            res.setHeader("Set-Cookie", [
-              ...(Array.isArray(res.getHeader("Set-Cookie"))
-                ? res.getHeader("Set-Cookie")
-                : res.getHeader("Set-Cookie")
-                ? [res.getHeader("Set-Cookie")]
-                : []),
-              `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-            ]);
+            const prev = res.getHeader("Set-Cookie");
+            const next = serialize(name, "", { ...options, maxAge: 0 });
+            res.setHeader("Set-Cookie", prev ? [].concat(prev, next) : [next]);
           },
         },
       }
     );
 
-    // signing out server-side clears httpOnly cookies
+    // This clears the httpOnly auth cookies via the adapter above
     await supabase.auth.signOut();
     res.status(200).json({ ok: true });
   } catch {
