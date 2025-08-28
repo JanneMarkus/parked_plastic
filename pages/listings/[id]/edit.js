@@ -4,41 +4,17 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ImageUploader from "@/components/ImageUploader";
-import { createServerClient } from "@supabase/ssr";
-import { serialize } from "cookie";
+import { createSupabaseServerClient } from "@/utils/supabase/server";
 
 const supabase = getSupabaseBrowser();
 
 export async function getServerSideProps(ctx) {
-  const supa = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        get(name) {
-          return ctx.req.cookies[name];
-        },
-        set(name, value, options) {
-          const cookie = serialize(name, value, options);
-          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-          if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-        },
-        remove(name, options) {
-          const cookie = serialize(name, "", { ...options, maxAge: 0 });
-          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-          if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-        },
-      },
-    }
-  );
+  const supabase = createSupabaseServerClient({ req: ctx.req, res: ctx.res });
 
-  // Refresh cookies/session if needed
-  const { data: userRes } = await supa.auth.getUser();
+  // 1) Require login
+  const { data: userRes, error: userErr } = await supabase.auth.getUser();
   const user = userRes?.user || null;
-
-  if (!user) {
+  if (userErr || !user) {
     return {
       redirect: {
         destination: `/login?redirect=${encodeURIComponent(ctx.resolvedUrl)}`,
@@ -47,25 +23,24 @@ export async function getServerSideProps(ctx) {
     };
   }
 
+  // 2) Load disc
   const id = ctx.params?.id;
-  const { data: disc, error } = await supa
+  const { data: disc, error: discErr } = await supabase
     .from("discs")
     .select("*")
     .eq("id", id)
     .single();
 
-  if (error || !disc) {
-    return {
-      redirect: { destination: "/account", permanent: false },
-    };
+  if (discErr || !disc) {
+    return { redirect: { destination: "/account", permanent: false } };
   }
 
+  // 3) Ownership guard
   if (disc.owner !== user.id) {
-    return {
-      redirect: { destination: `/listings/${id}`, permanent: false },
-    };
+    return { redirect: { destination: `/listings/${id}`, permanent: false } };
   }
 
+  // 4) Hand minimal props to the page
   return {
     props: {
       initialUser: { id: user.id, email: user.email ?? null },
@@ -154,7 +129,9 @@ export default function EditListing({ initialUser, initialDisc }) {
       setIsGlow(Boolean(initialDisc.is_glow ?? false));
 
       // Pre-hydrate uploader preview items if images exist
-      const existing = (initialDisc.image_urls || []).filter(Boolean).map((url) => ({ url }));
+      const existing = (initialDisc.image_urls || [])
+        .filter(Boolean)
+        .map((url) => ({ url }));
       if (existing.length) setImageItems(existing);
     }
 
@@ -206,7 +183,10 @@ export default function EditListing({ initialUser, initialDisc }) {
 
     // Validate numbers
     const weightNum = weight === "" ? null : Number(weight);
-    if (weight !== "" && (Number.isNaN(weightNum) || weightNum < 120 || weightNum > 200)) {
+    if (
+      weight !== "" &&
+      (Number.isNaN(weightNum) || weightNum < 120 || weightNum > 200)
+    ) {
       setErrorMsg("Weight should be between 120 and 200 grams.");
       return;
     }
@@ -222,10 +202,13 @@ export default function EditListing({ initialUser, initialDisc }) {
       setErrorMsg("Condition must be a number 1–10.");
       return;
     }
-    const condNum = condRaw === null ? null : Math.max(1, Math.min(10, Math.round(condRaw)));
+    const condNum =
+      condRaw === null ? null : Math.max(1, Math.min(10, Math.round(condRaw)));
 
     // Status validation (just in case)
-    const cleanStatus = ["active", "pending", "sold"].includes(status) ? status : "active";
+    const cleanStatus = ["active", "pending", "sold"].includes(status)
+      ? status
+      : "active";
 
     // Keep existing images if user didn't change anything in this session
     const finalImageUrls =
@@ -288,9 +271,19 @@ export default function EditListing({ initialUser, initialDisc }) {
         </Head>
         <p className="center muted">Loading…</p>
         <style jsx>{`
-          .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
-          .center { text-align: center; margin-top: 40px; }
-          .muted { color: #3a3a3a; opacity: 0.85; }
+          .wrap {
+            max-width: 960px;
+            margin: 32px auto;
+            padding: 0 16px;
+          }
+          .center {
+            text-align: center;
+            margin-top: 40px;
+          }
+          .muted {
+            color: #3a3a3a;
+            opacity: 0.85;
+          }
         `}</style>
       </main>
     );
@@ -301,13 +294,18 @@ export default function EditListing({ initialUser, initialDisc }) {
     <main className="wrap">
       <Head>
         <title>Edit Listing — Parked Plastic</title>
-        <meta name="description" content="Edit your Parked Plastic disc listing." />
+        <meta
+          name="description"
+          content="Edit your Parked Plastic disc listing."
+        />
       </Head>
       <style jsx>{styles}</style>
 
       <div className="titleRow">
         <h1>Edit Listing</h1>
-        <p className="subtle">Make changes and save. Leave fields blank if not applicable.</p>
+        <p className="subtle">
+          Make changes and save. Leave fields blank if not applicable.
+        </p>
       </div>
 
       {/* Errors / status */}
@@ -322,7 +320,7 @@ export default function EditListing({ initialUser, initialDisc }) {
             <div className="field span2">
               <label>Images</label>
               <ImageUploader
-                key={disc?.id || "edit-uploader"}          // force remount when listing loads
+                key={disc?.id || "edit-uploader"} // force remount when listing loads
                 supabase={supabase}
                 userId={user.id}
                 bucket="listing-images"
@@ -333,7 +331,9 @@ export default function EditListing({ initialUser, initialDisc }) {
                 initialItems={(disc?.image_urls || []).map((url) => ({ url }))}
                 onChange={setImageItems}
               />
-              <p className="hintRow">Photos update immediately when added/removed.</p>
+              <p className="hintRow">
+                Photos update immediately when added/removed.
+              </p>
             </div>
 
             {/* Title */}
@@ -452,7 +452,9 @@ export default function EditListing({ initialUser, initialDisc }) {
                   />
                 </div>
               </div>
-              <p className="hintRow">Use 0.5 increments. Example: 12 / 5 / -1 / 3</p>
+              <p className="hintRow">
+                Use 0.5 increments. Example: 12 / 5 / -1 / 3
+              </p>
             </div>
 
             {/* Plastic | Condition */}
@@ -488,9 +490,15 @@ export default function EditListing({ initialUser, initialDisc }) {
                   });
                 }}
               />
-              <p className="hintRow">Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new</p>
               <p className="hintRow">
-                <a target="_blank" rel="noopener noreferrer" href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/">
+                Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new
+              </p>
+              <p className="hintRow">
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
+                >
                   Learn more about Sleepy Scale here
                 </a>
               </p>
@@ -498,7 +506,9 @@ export default function EditListing({ initialUser, initialDisc }) {
 
             {/* Weight | Price */}
             <div className="field">
-              <label htmlFor="weight">Weight (g) <span className="hint">(optional)</span></label>
+              <label htmlFor="weight">
+                Weight (g) <span className="hint">(optional)</span>
+              </label>
               <input
                 id="weight"
                 type="number"
@@ -572,7 +582,8 @@ export default function EditListing({ initialUser, initialDisc }) {
                 <option value="sold">Sold</option>
               </select>
               <p className="hintRow">
-                Use <strong>Pending</strong> when a buyer has committed, but the sale isn’t final yet.
+                Use <strong>Pending</strong> when a buyer has committed, but the
+                sale isn’t final yet.
               </p>
             </div>
 

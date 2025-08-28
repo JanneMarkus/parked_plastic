@@ -1,4 +1,4 @@
-// middleware.js (at repo root)
+// middleware.js
 import { updateSession } from './utils/supabase/middleware'
 
 export async function middleware(request) {
@@ -7,6 +7,7 @@ export async function middleware(request) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)',
+    // exclude API + static assets
+    '/((?!api/|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)',
   ],
 }

@@ -4,39 +4,17 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { getSupabaseBrowser } from '@/lib/supabaseBrowser'
 import ImageUploader from "@/components/ImageUploader";
-import { createServerClient } from "@supabase/ssr";
-import { serialize } from "cookie";
+import { createSupabaseServerClient } from "@/utils/supabase/server";
 
 /* --------------------------- Server-side auth gate --------------------------- */
 const supabase = getSupabaseBrowser()
 
 export async function getServerSideProps(ctx) {
-  const serverSupabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        get(name) {
-          return ctx.req.cookies[name];
-        },
-        set(name, value, options) {
-          const cookie = serialize(name, value, options);
-          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-          if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-        },
-        remove(name, options) {
-          const cookie = serialize(name, "", { ...options, maxAge: 0 });
-          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-          if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-        },
-      },
-    }
-  );
+  // Use the shared server client (unified cookie flags; publishable key)
+  const supabase = createSupabaseServerClient({ req: ctx.req, res: ctx.res });
 
-  const { data } = await serverSupabase.auth.getUser();
-  if (!data?.user) {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) {
     return {
       redirect: {
         destination: `/login?redirect=${encodeURIComponent("/create-listing")}`,
@@ -499,7 +477,7 @@ const styles = `
   }
   .wrap { max-width: 960px; margin: 24px auto 80px; padding: 0 12px; background: var(--sea); }
   .titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; color: --var(storm); letter-spacing: .5px; margin: 0; font-size: 1.6rem; }
+  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--storm); letter-spacing: .5px; margin: 0; font-size: 1.6rem; }
   .subtle { color: var(--char); opacity: .85; margin: 0; }
   .statusRegion { min-height: 22px; margin-bottom: 8px; }
   .error, .info { border-radius: 10px; padding: 10px 12px; font-size: .95rem; margin: 8px 0; }

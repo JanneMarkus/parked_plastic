@@ -7,46 +7,30 @@ import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ContactSeller from "@/components/ContactSeller";
 import PlaceholderDisc from "@/components/PlaceholderDisc";
-import { serialize } from "cookie";
-import { createServerClient } from "@supabase/ssr";
+import { createSupabaseServerClient } from "@/utils/supabase/server";
 
 const supabase = getSupabaseBrowser();
 
 export async function getServerSideProps(ctx) {
-  const supa = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        get(name) {
-          return ctx.req.cookies[name];
-        },
-        set(name, value, options) {
-          const cookie = serialize(name, value, options);
-          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-          if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-        },
-        remove(name, options) {
-          const cookie = serialize(name, "", { ...options, maxAge: 0 });
-          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-          if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-        },
+  const supabase = createSupabaseServerClient({ req: ctx.req, res: ctx.res });
+  // Require login
+  const { data: { user } = {}, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    return {
+      redirect: {
+        destination: `/login?redirect=${encodeURIComponent(ctx.resolvedUrl)}`,
+        permanent: false,
       },
-    }
-  );
+    };
+  }
 
-  const { data: userRes } = await supa.auth.getUser();
-  const user = userRes?.user || null;
-
+  // Authenticated: pass minimal user info (used for owner UI)
   return {
     props: {
-      initialUser: user ? { id: user.id, email: user.email ?? null } : null,
+      initialUser: { id: user.id, email: user.email ?? null },
     },
   };
-}
+};
 
 export default function ListingDetail({ initialUser }) {
   const router = useRouter();

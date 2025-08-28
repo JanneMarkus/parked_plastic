@@ -1,12 +1,12 @@
 // utils/supabase/middleware.js
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+
+const defaults = { httpOnly: true, sameSite: 'lax', path: '/' }
 
 export async function updateSession(request) {
-  // ✅ forward the original request headers
-  const response = NextResponse.next({
-    request: { headers: request.headers },
-  })
+  const res = NextResponse.next()
+  const secure = process.env.NODE_ENV === 'production'
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -17,17 +17,18 @@ export async function updateSession(request) {
           return request.cookies.get(name)?.value
         },
         set(name, value, options) {
-          response.cookies.set({ name, value, ...options })
+          res.cookies.set({ name, value, ...defaults, secure, ...options })
         },
         remove(name, options) {
-          response.cookies.set({ name, value: '', ...options, maxAge: 0 })
+          res.cookies.set({ name, value: '', maxAge: 0, ...defaults, secure, ...options })
         },
       },
     }
   )
 
-  // This triggers refresh-token rotation when needed and writes new cookies to `response`
-  await supabase.auth.getUser()
+  // Fast local verification (JWKS-backed) with server fallback
+  const { error } = await supabase.auth.getClaims()
+  if (error) await supabase.auth.getUser()
 
-  return response
+  return res
 }

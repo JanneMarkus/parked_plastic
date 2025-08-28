@@ -3,8 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
-import { createServerClient } from "@supabase/ssr";
-import { serialize } from "cookie";
+import { createSupabaseServerClient } from "@/utils/supabase/server";
 
 /* --------------------------- Shared small helpers -------------------------- */
 const supabase = getSupabaseBrowser();
@@ -26,31 +25,10 @@ export async function getServerSideProps(ctx) {
     typeof ctx.query?.redirect === "string" ? ctx.query.redirect : "/";
   const nextPath = sanitizeRedirectPath(raw);
 
-  // Wire @supabase/ssr with cookie adapter for Pages Router
-  const serverSupabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        get(name) {
-          return ctx.req.cookies[name];
-        },
-        set(name, value, options) {
-          const cookie = serialize(name, value, options);
-          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-          if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-        },
-        remove(name, options) {
-          const cookie = serialize(name, "", { ...options, maxAge: 0 });
-          let existing = ctx.res.getHeader("Set-Cookie") ?? [];
-          if (!Array.isArray(existing)) existing = [existing];
-          ctx.res.setHeader("Set-Cookie", [...existing, cookie]);
-        },
-      },
-    }
-  );
+  const serverSupabase = createSupabaseServerClient({
+    req: ctx.req,
+    res: ctx.res,
+  });
 
   // If already signed in, bounce to target immediately
   const { data } = await serverSupabase.auth.getUser();
@@ -203,78 +181,54 @@ export default function Login({ initialRedirect = "/" }) {
       const cleanPassword = String(password).trim();
 
       if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password: cleanPassword,
-        });
-        if (error) throw error;
-        // Force an immediate sync so the very next SSR request sees the cookies.
-        await supabase.auth.getSession();
-        await fetch("/api/auth/sync", {
+        const res = await fetch("/api/auth/signin", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-        }).catch(() => {});
+          body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
+        });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j?.error || "Sign-in failed");
         router.replace(nextPath);
         return;
       }
 
       if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password: cleanPassword,
-          options: {
-            emailRedirectTo:
+        const res = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            email: cleanEmail,
+            password: cleanPassword,
+            // Ensure the magic-link lands back on your login page with the intended redirect
+            redirectTo:
               origin != null
                 ? `${origin}/login?redirect=${encodeURIComponent(nextPath)}`
                 : undefined,
-          },
+          }),
         });
 
-        if (error) {
-          const raw = String(error?.message || "");
-          // Handle “already registered” nicely
-          if (
-            /already registered/i.test(raw) ||
-            error?.code === "user_already_registered"
-          ) {
-            setMode("signin");
-            setInfoMsg(
-              "That email is already registered. Sign in below or use “Forgot your password?”."
-            );
-            return;
-          }
-          // If provider says email not confirmed yet, offer a resend
-          if (
-            /email not confirmed/i.test(raw) ||
-            error?.code === "email_not_confirmed"
-          ) {
-            setMode("signin");
-            setInfoMsg(
-              "Your email isn’t confirmed yet. We can resend the confirmation email."
-            );
-            setCanResendConfirm(true);
-            return;
-          }
-          throw error;
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || "Sign-up failed");
+
+        // If your project doesn't require email confirmations, a session may already exist.
+        // Hydrate the client session immediately (optional, for instant UI updates).
+        if (json.hasSession && json.access_token && json.refresh_token) {
+          await supabase.auth.setSession({
+            access_token: json.access_token,
+            refresh_token: json.refresh_token,
+          });
+          // Navigate to the target page
+          router.replace(nextPath);
+          return;
         }
 
-        // Confirmations ON → no immediate session; email will be sent.
-        if (!data.session) {
-          setInfoMsg(
-            "Check your inbox to confirm your account. After verification, sign in here."
-          );
-          setMode("signin");
-        } else {
-          // Force an immediate sync so the very next SSR request sees the cookies.
-          await supabase.auth.getSession();
-          await fetch("/api/auth/sync", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-          }).catch(() => {});
-          router.replace(nextPath);
-        }
+        // Otherwise, guide the user to confirm their email, then sign in.
+        setInfoMsg(
+          "Check your inbox to confirm your account. After verification, come back here to sign in."
+        );
+        setMode("signin");
         return;
       }
 

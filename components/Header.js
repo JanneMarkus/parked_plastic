@@ -59,20 +59,9 @@ export default function Header() {
     // Keep SSR cookies in sync with client auth state
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-
-      try {
-        await fetch("/api/auth/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ event, session }),
-        });
-      } catch {
-        // ignore network hiccups
-      }
 
       if (u) {
         const { data: p } = await supabase
@@ -101,14 +90,10 @@ export default function Header() {
         const { data } = await supabase.auth.getSession();
         if (data.session) {
           await supabase.auth.refreshSession().catch(() => {});
-        } else {
-          // no client session — ensure SSR cookies are cleared too
-          await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
         }
       } catch {
         // Hard clear local session on unexpected errors
         await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-        await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
       }
     };
     document.addEventListener("visibilitychange", onVis);
