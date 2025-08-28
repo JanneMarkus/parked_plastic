@@ -16,94 +16,55 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
+      let mounted = true;
 
-    async function readUserAndProfile() {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const u = data?.session?.user ?? null;
-        if (!mounted) return;
+      (async () => {
+        try {
+          const { data } = await supabase.auth.getSession();
+          if (!mounted) return;
+          setUser(data?.session?.user ?? null);
 
-        setUser(u);
-
-        if (u) {
-          const { data: p } = await supabase
-            .from("profiles")
-            .select("full_name, avatar_url")
-            .eq("id", u.id)
-            .maybeSingle();
-
-          setProfile({
-            full_name:
-              p?.full_name ||
-              u.user_metadata?.full_name ||
-              u.user_metadata?.name ||
-              (typeof u.email === "string" ? u.email.split("@")[0] : null) ||
-              null,
-            avatar_url: p?.avatar_url || u.user_metadata?.avatar_url || null,
-          });
-        } else {
-          setProfile({ full_name: null, avatar_url: null });
+          if (data?.session?.user) {
+            const { data: p } = await supabase
+              .from("profiles")
+              .select("full_name, avatar_url")
+              .eq("id", data.session.user.id)
+              .maybeSingle();
+            setProfile({
+              full_name:
+                p?.full_name ||
+                data.session.user.user_metadata?.full_name ||
+                data.session.user.user_metadata?.name ||
+                data.session.user.email?.split("@")[0] ||
+                null,
+              avatar_url:
+                p?.avatar_url ||
+                data.session.user.user_metadata?.avatar_url ||
+                null,
+            });
+          } else {
+            setProfile({ full_name: null, avatar_url: null });
+          }
+        } catch {
+          if (mounted) {
+            setUser(null);
+            setProfile({ full_name: null, avatar_url: null });
+          }
         }
-      } catch {
-        // fall back to signed-out UI
-        if (mounted) {
-          setUser(null);
-          setProfile({ full_name: null, avatar_url: null });
+      })();
+
+      const { data: sub } = supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          const u = session?.user ?? null;
+          setUser(u);
         }
-      }
-    }
+      );
 
-    readUserAndProfile();
-
-    // Keep SSR cookies in sync with client auth state
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-
-      if (u) {
-        const { data: p } = await supabase
-          .from("profiles")
-          .select("full_name, avatar_url")
-          .eq("id", u.id)
-          .maybeSingle();
-        setProfile({
-          full_name:
-            p?.full_name ||
-            u?.user_metadata?.full_name ||
-            u?.user_metadata?.name ||
-            (typeof u?.email === "string" ? u.email.split("@")[0] : null) ||
-            null,
-          avatar_url: p?.avatar_url || u?.user_metadata?.avatar_url || null,
-        });
-      } else {
-        setProfile({ full_name: null, avatar_url: null });
-      }
-    });
-
-    // When a long-idle tab regains focus, try to refresh; if it fails, clear both sides.
-    const onVis = async () => {
-      if (document.visibilityState !== "visible") return;
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
-          await supabase.auth.refreshSession().catch(() => {});
-        }
-      } catch {
-        // Hard clear local session on unexpected errors
-        await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-      }
-    };
-    document.addEventListener("visibilitychange", onVis);
-
-    return () => {
-      mounted = false;
-      subscription?.unsubscribe?.();
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, []);
+      return () => {
+        mounted = false;
+        sub?.subscription?.unsubscribe?.();
+      };
+    }, []);
 
   const displayName = useMemo(() => {
     if (profile.full_name) return profile.full_name;
@@ -129,7 +90,8 @@ export default function Header() {
   function handlePostClick() {
     setMenuOpen(false);
     if (user) router.push("/create-listing");
-    else router.push(`/login?redirect=${encodeURIComponent("/create-listing")}`);
+    else
+      router.push(`/login?redirect=${encodeURIComponent("/create-listing")}`);
   }
 
   function handleManageClick() {
@@ -152,15 +114,14 @@ export default function Header() {
   // Resilient "force sign out": clears local session AND server cookies and reloads cleanly
   async function handleSignOut() {
     try {
-      // Clear local (even if network is down)
       await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-      // Clear server httpOnly cookies used by SSR
-      await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
+      await fetch("/api/auth/clear", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => {});
     } finally {
       setMenuOpen(false);
-      // Full reload to avoid any hydration drift
-      if (typeof window !== "undefined") window.location.replace("/login");
-      else window.location.assign("/");
+      window.location.replace("/login");
     }
   }
 
@@ -168,7 +129,11 @@ export default function Header() {
     <header className="header">
       {/* Left: Logo */}
       <div className="left">
-        <Link href="/" aria-label="Go to Parked Plastic home" className="logoLink">
+        <Link
+          href="/"
+          aria-label="Go to Parked Plastic home"
+          className="logoLink"
+        >
           <BrandLogo />
         </Link>
       </div>
@@ -257,10 +222,18 @@ export default function Header() {
         aria-label="Mobile navigation"
       >
         <div className="mobileInner">
-          <Link href="/" className="mobileLink" onClick={() => setMenuOpen(false)}>
+          <Link
+            href="/"
+            className="mobileLink"
+            onClick={() => setMenuOpen(false)}
+          >
             Browse
           </Link>
-          <Link href="/account" className="mobileLink" onClick={() => setMenuOpen(false)}>
+          <Link
+            href="/account"
+            className="mobileLink"
+            onClick={() => setMenuOpen(false)}
+          >
             Manage Listings
           </Link>
 
@@ -302,7 +275,11 @@ export default function Header() {
               </button>
             </>
           ) : (
-            <Link href="/login" className="mobileLink" onClick={() => setMenuOpen(false)}>
+            <Link
+              href="/login"
+              className="mobileLink"
+              onClick={() => setMenuOpen(false)}
+            >
               Sign in
             </Link>
           )}

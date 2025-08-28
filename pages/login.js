@@ -20,15 +20,15 @@ const isValidEmail = (v) =>
 
 /* --------------------------- Server-side redirect -------------------------- */
 export async function getServerSideProps(ctx) {
+  const serverSupabase = createSupabaseServerClient({
+    req: ctx.req,
+    res: ctx.res,
+  });
   // Read & sanitize the redirect target on the server
   const raw =
     typeof ctx.query?.redirect === "string" ? ctx.query.redirect : "/";
   const nextPath = sanitizeRedirectPath(raw);
 
-  const serverSupabase = createSupabaseServerClient({
-    req: ctx.req,
-    res: ctx.res,
-  });
 
   // If already signed in, bounce to target immediately
   const { data } = await serverSupabase.auth.getUser();
