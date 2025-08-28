@@ -29,7 +29,6 @@ export async function getServerSideProps(ctx) {
     typeof ctx.query?.redirect === "string" ? ctx.query.redirect : "/";
   const nextPath = sanitizeRedirectPath(raw);
 
-
   // If already signed in, bounce to target immediately
   const { data } = await serverSupabase.auth.getUser();
   if (data?.user) {
@@ -189,7 +188,11 @@ export default function Login({ initialRedirect = "/" }) {
         });
         const j = await res.json();
         if (!res.ok) throw new Error(j?.error || "Sign-in failed");
-        router.replace(nextPath);
+
+        // Hard navigation so the new httpOnly cookies are applied from first paint
+        if (typeof window !== "undefined") {
+          window.location.assign(nextPath); // or window.location.replace(nextPath)
+        }
         return;
       }
 
@@ -201,7 +204,7 @@ export default function Login({ initialRedirect = "/" }) {
           body: JSON.stringify({
             email: cleanEmail,
             password: cleanPassword,
-            // Ensure the magic-link lands back on your login page with the intended redirect
+            // So magic link returns to login with intended redirect
             redirectTo:
               origin != null
                 ? `${origin}/login?redirect=${encodeURIComponent(nextPath)}`
@@ -212,19 +215,16 @@ export default function Login({ initialRedirect = "/" }) {
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || "Sign-up failed");
 
-        // If your project doesn't require email confirmations, a session may already exist.
-        // Hydrate the client session immediately (optional, for instant UI updates).
-        if (json.hasSession && json.access_token && json.refresh_token) {
-          await supabase.auth.setSession({
-            access_token: json.access_token,
-            refresh_token: json.refresh_token,
-          });
-          // Navigate to the target page
-          router.replace(nextPath);
-          return;
+        // If your Supabase project auto-signs in after signup (no email confirmation),
+        // the handler will return a session. In that case, hard navigate.
+        if (json.hasSession) {
+          if (typeof window !== "undefined") {
+            window.location.assign(nextPath); // or replace()
+          }
+          return; // stop here
         }
 
-        // Otherwise, guide the user to confirm their email, then sign in.
+        // Otherwise, confirmation is required: stay on page and inform the user.
         setInfoMsg(
           "Check your inbox to confirm your account. After verification, come back here to sign in."
         );
@@ -320,17 +320,6 @@ export default function Login({ initialRedirect = "/" }) {
           {checking && <div className="info">Checking your session…</div>}
           {infoMsg && <div className="info">{infoMsg}</div>}
           {errorMsg && <div className="error">{errorMsg}</div>}
-          {/* Escape hatch visible when there’s trouble */}
-          <div className="troubleRow">
-            <button
-              type="button"
-              className="linklike"
-              onClick={() => hardResetSession()}
-              title="Clears auth cookies and local session"
-            >
-              Having trouble? Reset session
-            </button>
-          </div>
         </div>
 
         {signedInUser ? (

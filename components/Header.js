@@ -15,56 +15,65 @@ export default function Header() {
   const [profile, setProfile] = useState({ full_name: null, avatar_url: null });
   const [menuOpen, setMenuOpen] = useState(false);
 
-  useEffect(() => {
-      let mounted = true;
+  // components/Header.js (only the auth bits need to change)
+useEffect(() => {
+  let mounted = true;
 
-      (async () => {
-        try {
-          const { data } = await supabase.auth.getSession();
-          if (!mounted) return;
-          setUser(data?.session?.user ?? null);
+  async function refreshFromServerCookie() {
+    try {
+      const res = await fetch("/api/auth/user", { credentials: "include" });
+      const j = await res.json();
+      if (!mounted) return;
+      const u = j?.user || null;
+      setUser(u);
+      if (u) {
+        // Load profile via anon client, filtered by user.id (RLS will allow the row for owner)
+        const { data: p } = await supabase
+          .from("profiles")
+          .select("full_name, avatar_url")
+          .eq("id", u.id)
+          .maybeSingle();
+        setProfile({
+          full_name:
+            p?.full_name ||
+            u?.user_metadata?.full_name ||
+            u?.user_metadata?.name ||
+            (typeof u?.email === "string" ? u.email.split("@")[0] : null) ||
+            null,
+          avatar_url: p?.avatar_url || u?.user_metadata?.avatar_url || null,
+        });
+      } else {
+        setProfile({ full_name: null, avatar_url: null });
+      }
+    } catch {
+      if (mounted) {
+        setUser(null);
+        setProfile({ full_name: null, avatar_url: null });
+      }
+    }
+  }
 
-          if (data?.session?.user) {
-            const { data: p } = await supabase
-              .from("profiles")
-              .select("full_name, avatar_url")
-              .eq("id", data.session.user.id)
-              .maybeSingle();
-            setProfile({
-              full_name:
-                p?.full_name ||
-                data.session.user.user_metadata?.full_name ||
-                data.session.user.user_metadata?.name ||
-                data.session.user.email?.split("@")[0] ||
-                null,
-              avatar_url:
-                p?.avatar_url ||
-                data.session.user.user_metadata?.avatar_url ||
-                null,
-            });
-          } else {
-            setProfile({ full_name: null, avatar_url: null });
-          }
-        } catch {
-          if (mounted) {
-            setUser(null);
-            setProfile({ full_name: null, avatar_url: null });
-          }
-        }
-      })();
+  // Initial read from server cookie (httpOnly)
+  refreshFromServerCookie();
 
-      const { data: sub } = supabase.auth.onAuthStateChange(
-        (_event, session) => {
-          const u = session?.user ?? null;
-          setUser(u);
-        }
-      );
+  // Keep your existing onAuthStateChange (for client-initiated sign-in/out)
+  const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+    // If you sign in on client and call setSession, this will keep things snappy
+    setUser(session?.user ?? null);
+  });
 
-      return () => {
-        mounted = false;
-        sub?.subscription?.unsubscribe?.();
-      };
-    }, []);
+  // Also refresh when tab becomes visible (session may have rotated server-side)
+  const onVis = () => {
+    if (document.visibilityState === "visible") refreshFromServerCookie();
+  };
+  document.addEventListener("visibilitychange", onVis);
+
+  return () => {
+    mounted = false;
+    sub?.subscription?.unsubscribe?.();
+    document.removeEventListener("visibilitychange", onVis);
+  };
+}, []);
 
   const displayName = useMemo(() => {
     if (profile.full_name) return profile.full_name;

@@ -4,12 +4,25 @@ import { serialize, parse } from "cookie";
 
 export function createSupabaseServerClient({ req, res }) {
   const isProd = process.env.NODE_ENV === "production";
-  const defaults = { path: "/", httpOnly: true, sameSite: "lax", secure: isProd };
+
+  // If you want a domain cookie in prod, set it here (optional):
+  // const host = req?.headers?.host || "";
+  // const rootDomain =
+  //   host.endsWith(".yourdomain.com") || host === "yourdomain.com"
+  //     ? ".yourdomain.com"
+  //     : undefined;
+
+  const baseDefaults = {
+    path: "/",
+    sameSite: "lax",
+    // We will force httpOnly & secure below so they can’t be overridden
+    // ...(isProd && rootDomain ? { domain: rootDomain } : {}),
+  };
 
   function appendSetCookie(nextCookie) {
     const prev = res.getHeader("Set-Cookie");
     const list = Array.isArray(prev) ? prev : prev ? [prev] : [];
-    res.setHeader("Set-Cookie", [...list, nextCookie]); // ← always append
+    res.setHeader("Set-Cookie", Array.from(new Set([...list, nextCookie])));
   }
 
   return createServerClient(
@@ -23,17 +36,24 @@ export function createSupabaseServerClient({ req, res }) {
             return req.cookies[name];
           }
           const header = req?.headers?.cookie || "";
-          const all = parse(header);
-          return all[name];
+          return parse(header)[name];
         },
         set(name, value, options) {
-          const cookie = serialize(name, value, { ...defaults, ...options });
+          // IMPORTANT: app options first, then defaults, then force flags
+          const cookie = serialize(name, value, {
+            ...options,
+            ...baseDefaults,
+            httpOnly: true,                 // force HttpOnly
+            secure: isProd,                 // force Secure on HTTPS
+          });
           appendSetCookie(cookie);
         },
         remove(name, options) {
           const cookie = serialize(name, "", {
-            ...defaults,
             ...options,
+            ...baseDefaults,
+            httpOnly: true,                 // force HttpOnly
+            secure: isProd,                 // force Secure on HTTPS
             maxAge: 0,
             expires: new Date(0),
           });
