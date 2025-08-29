@@ -7,6 +7,11 @@ import ImageUploader from "@/components/ImageUploader";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
 import { FEATURED, computeBrandSuggestions } from "@/data/brands";
 
+// ---- Helpers for datalist option generation ----
+const range = (start, end, step = 1) =>
+  Array.from({ length: Math.floor((end - start) / step) + 1 }, (_, i) => start + i * step);
+const fmt = (n) => (Number.isInteger(n) ? String(n) : String(n.toFixed(1)));
+
 export async function getServerSideProps(ctx) {
   const supabase = createSupabaseServerClient({ req: ctx.req, res: ctx.res });
 
@@ -132,6 +137,12 @@ export default function EditListing({ initialUser, initialDisc }) {
       setBrandHighlight(-1);
     }
   };
+
+  // ---- Datalist options (memoized) ----
+  const speedOptions = useMemo(() => range(1, 15, 0.5).map(fmt), []);
+  const glideOptions = useMemo(() => range(1, 7, 1).map(fmt), []);
+  const turnOptions  = useMemo(() => range(-5, 1, 0.5).map(fmt), []);
+  const fadeOptions  = useMemo(() => range(0, 6, 0.5).map(fmt), []);
 
   // Number helpers for Turn control
   function toHalfStep(n) { return Math.round(n * 2) / 2; }
@@ -452,12 +463,13 @@ export default function EditListing({ initialUser, initialDisc }) {
                   <input
                     type="number"
                     step="0.5"
-                    min={0}
+                    min={1}
                     max={15}
                     required
                     value={speed}
                     onChange={(e) => setSpeed(e.target.value)}
                     inputMode="decimal"
+                    list="speedOptions"
                   />
                 </div>
                 <div className="flightField">
@@ -465,12 +477,13 @@ export default function EditListing({ initialUser, initialDisc }) {
                   <input
                     type="number"
                     step="0.5"
-                    min={0}
+                    min={1}
                     max={7}
                     required
                     value={glide}
                     onChange={(e) => setGlide(e.target.value)}
                     inputMode="decimal"
+                    list="glideOptions"
                   />
                 </div>
                 <div className="flightField">
@@ -495,6 +508,7 @@ export default function EditListing({ initialUser, initialDisc }) {
                       onBlur={sanitizeTurn}
                       inputMode="decimal"
                       placeholder="e.g., -1"
+                      list="turnOptions"
                     />
                     <button
                       type="button"
@@ -517,10 +531,25 @@ export default function EditListing({ initialUser, initialDisc }) {
                     value={fade}
                     onChange={(e) => setFade(e.target.value)}
                     inputMode="decimal"
+                    list="fadeOptions"
                   />
                 </div>
               </div>
               <p className="hintRow">Use 0.5 increments. Example: 12 / 5 / -1 / 3</p>
+
+              {/* Datalists for optional dropdowns */}
+              <datalist id="speedOptions">
+                {speedOptions.map((v) => <option key={v} value={v} />)}
+              </datalist>
+              <datalist id="glideOptions">
+                {glideOptions.map((v) => <option key={v} value={v} />)}
+              </datalist>
+              <datalist id="turnOptions">
+                {turnOptions.map((v) => <option key={v} value={v} />)}
+              </datalist>
+              <datalist id="fadeOptions">
+                {fadeOptions.map((v) => <option key={v} value={v} />)}
+              </datalist>
             </div>
 
             {/* Plastic | Condition */}
@@ -536,40 +565,47 @@ export default function EditListing({ initialUser, initialDisc }) {
               />
             </div>
             <div className="field">
-              <label htmlFor="condition">Condition (Sleepy Scale 1–10)*</label>
-              <input
-                id="condition"
-                type="number"
-                min={1}
-                max={10}
-                step={1}
-                required
-                inputMode="numeric"
-                placeholder="e.g., 8"
-                value={conditionScore}
-                onChange={(e) => setConditionScore(e.target.value)}
-                onBlur={() => {
-                  setConditionScore((prev) => {
-                    if (prev === "") return prev;
-                    const n = Number(prev);
-                    if (!Number.isFinite(n)) return "";
-                    return String(Math.max(1, Math.min(10, Math.round(n))));
-                  });
-                }}
-              />
-              <p className="hintRow">
-                Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new
-              </p>
-              <p className="hintRow">
-                <a
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
-                >
-                  Learn more about Sleepy Scale here
-                </a>
-              </p>
-            </div>
+  <label htmlFor="condition">Condition*</label>
+  <input
+    id="condition"
+    type="number"
+    min={1}
+    max={10}
+    step={1}
+    inputMode="numeric"
+    placeholder="e.g., 8"
+    required
+    value={conditionScore}
+    onChange={(e) => setConditionScore(e.target.value)}
+    onBlur={() => {
+      setConditionScore((prev) => {
+        if (prev === "") return prev;
+        const n = Number(prev);
+        if (!Number.isFinite(n)) return "";
+        return String(Math.max(1, Math.min(10, Math.round(n))));
+      });
+    }}
+    list="conditionOptions"
+  />
+  <datalist id="conditionOptions">
+    {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
+      <option key={v} value={v} />
+    ))}
+  </datalist>
+
+  <p className="hintRow">
+    Sleepy Scale (1–10): 1 = Extremely beat • 10 = Brand new
+  </p>
+  <p className="hintRow">
+    <a
+      target="_blank"
+      rel="noopener noreferrer"
+      href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
+    >
+      Learn more about Sleepy Scale here
+    </a>
+  </p>
+</div>
 
             {/* Weight | Price */}
             <div className="field">

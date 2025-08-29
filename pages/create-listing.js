@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ImageUploader from "@/components/ImageUploader";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
+import { FEATURED, computeBrandSuggestions } from "@/data/brands";
 
 /* --------------------------- Server-side auth gate --------------------------- */
 export async function getServerSideProps(ctx) {
@@ -25,6 +26,11 @@ export async function getServerSideProps(ctx) {
   };
 }
 
+// ---- Helpers for datalist option generation ----
+const range = (start, end, step = 1) =>
+  Array.from({ length: Math.floor((end - start) / step) + 1 }, (_, i) => start + i * step);
+const fmt = (n) => (Number.isInteger(n) ? String(n) : String(n.toFixed(1)));
+
 /* ---------------------------------- Page ---------------------------------- */
 export default function CreateListing({ user }) {
   const router = useRouter();
@@ -37,6 +43,12 @@ export default function CreateListing({ user }) {
   const [glide, setGlide] = useState("");
   const [turn, setTurn] = useState("");
   const [fade, setFade] = useState("");
+
+  // Datalist options (memoized)
+  const speedOptions = useMemo(() => range(1, 15, 0.5).map(fmt), []);
+  const glideOptions = useMemo(() => range(1, 7, 1).map(fmt), []);
+  const turnOptions  = useMemo(() => range(-5, 1, 0.5).map(fmt), []);
+  const fadeOptions  = useMemo(() => range(0, 6, 0.5).map(fmt), []);
 
   // Form state
   const [title, setTitle] = useState("");
@@ -57,6 +69,46 @@ export default function CreateListing({ user }) {
   // UI state
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // --- Brand autocomplete state & logic ---
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [brandHighlight, setBrandHighlight] = useState(-1);
+
+  const brandSuggestions = useMemo(() => computeBrandSuggestions(brand), [brand]);
+
+  const onBrandFocus = () => setBrandOpen(true);
+  const onBrandBlur = () => {
+    setTimeout(() => setBrandOpen(false), 80);
+  };
+  const chooseBrand = (name) => {
+    if (name === "Other") setBrand("Other");
+    else setBrand(name);
+    setBrandOpen(false);
+    setBrandHighlight(-1);
+  };
+  const onBrandKeyDown = (e) => {
+    if (!brandOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      setBrandOpen(true);
+      return;
+    }
+    if (!brandOpen) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setBrandHighlight((i) => Math.min(i + 1, brandSuggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setBrandHighlight((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      if (brandHighlight >= 0 && brandHighlight < brandSuggestions.length) {
+        e.preventDefault();
+        chooseBrand(brandSuggestions[brandHighlight]);
+      }
+    } else if (e.key === "Escape") {
+      setBrandOpen(false);
+      setBrandHighlight(-1);
+    }
+  };
 
   // Number helpers for Turn control
   function toHalfStep(n) { return Math.round(n * 2) / 2; }
@@ -231,18 +283,48 @@ export default function CreateListing({ user }) {
             </div>
 
             {/* Brand | Mold */}
-            <div className="field">
+            <div className="field pp-autocomplete">
               <label htmlFor="brand">Brand*</label>
               <input
                 id="brand"
                 type="text"
                 value={brand}
                 required
-                onChange={(e) => setBrand(e.target.value)}
+                onChange={(e) => { setBrand(e.target.value); setBrandOpen(true); }}
+                onFocus={onBrandFocus}
+                onBlur={onBrandBlur}
+                onKeyDown={onBrandKeyDown}
+                aria-autocomplete="list"
+                aria-expanded={brandOpen ? "true" : "false"}
+                aria-controls="brand-listbox"
                 placeholder="Innova, Discraft, MVP…"
                 autoComplete="off"
               />
+              {brandOpen && brandSuggestions.length > 0 && (
+                <ul
+                  id="brand-listbox"
+                  role="listbox"
+                  className="pp-suggest"
+                  aria-label="Brand suggestions"
+                >
+                  {brandSuggestions.map((name, i) => (
+                    <li
+                      key={name}
+                      role="option"
+                      aria-selected={i === brandHighlight}
+                      className={`pp-suggest-item ${i === brandHighlight ? "is-active" : ""}`}
+                      onMouseDown={(e) => e.preventDefault()}  // keep focus
+                      onClick={() => chooseBrand(name)}
+                      onMouseEnter={() => setBrandHighlight(i)}
+                    >
+                      {name}
+                      {FEATURED.includes(name)}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
+
             <div className="field">
               <label htmlFor="mold">Mold*</label>
               <input
@@ -265,13 +347,14 @@ export default function CreateListing({ user }) {
                   <input
                     type="number"
                     step="0.5"
-                    min={0}
+                    min={1}
                     max={15}
                     required
                     value={speed}
                     onChange={(e) => setSpeed(e.target.value)}
                     inputMode="decimal"
                     placeholder="e.g., 12"
+                    list="speedOptions"
                   />
                 </div>
                 <div className="flightField">
@@ -279,13 +362,14 @@ export default function CreateListing({ user }) {
                   <input
                     type="number"
                     step="0.5"
-                    min={0}
+                    min={1}
                     max={7}
                     required
                     value={glide}
                     onChange={(e) => setGlide(e.target.value)}
                     inputMode="decimal"
                     placeholder="e.g., 5"
+                    list="glideOptions"
                   />
                 </div>
                 <div className="flightField">
@@ -310,6 +394,7 @@ export default function CreateListing({ user }) {
                       onBlur={sanitizeTurn}
                       inputMode="decimal"
                       placeholder="e.g., -1"
+                      list="turnOptions"
                     />
                     <button
                       type="button"
@@ -333,10 +418,25 @@ export default function CreateListing({ user }) {
                     onChange={(e) => setFade(e.target.value)}
                     inputMode="decimal"
                     placeholder="e.g., 3"
+                    list="fadeOptions"
                   />
                 </div>
               </div>
               <p className="hintRow">Use 0.5 increments. Example format: 12 / 5 / -1 / 3</p>
+
+              {/* Datalists for optional dropdowns */}
+              <datalist id="speedOptions">
+                {speedOptions.map((v) => <option key={v} value={v} />)}
+              </datalist>
+              <datalist id="glideOptions">
+                {glideOptions.map((v) => <option key={v} value={v} />)}
+              </datalist>
+              <datalist id="turnOptions">
+                {turnOptions.map((v) => <option key={v} value={v} />)}
+              </datalist>
+              <datalist id="fadeOptions">
+                {fadeOptions.map((v) => <option key={v} value={v} />)}
+              </datalist>
             </div>
 
             {/* Plastic | Condition */}
@@ -352,38 +452,47 @@ export default function CreateListing({ user }) {
               />
             </div>
             <div className="field">
-              <label htmlFor="condition">Condition*</label>
-              <input
-                id="condition"
-                type="number"
-                min={1}
-                max={10}
-                step={1}
-                inputMode="numeric"
-                placeholder="e.g., 8"
-                required
-                value={conditionScore}
-                onChange={(e) => setConditionScore(e.target.value)}
-                onBlur={() => {
-                  setConditionScore((prev) => {
-                    if (prev === "") return prev;
-                    const n = Number(prev);
-                    if (!Number.isFinite(n)) return "";
-                    return String(Math.max(1, Math.min(10, Math.round(n))));
-                  });
-                }}
-              />
-              <p className="hintRow">Sleepy Scale (1-10): 1 = Extremely beat • 10 = Brand new</p>
-              <p className="hintRow">
-                <a
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
-                >
-                  Learn more about Sleepy Scale here
-                </a>
-              </p>
-            </div>
+  <label htmlFor="condition">Condition*</label>
+  <input
+    id="condition"
+    type="number"
+    min={1}
+    max={10}
+    step={1}
+    inputMode="numeric"
+    placeholder="e.g., 8"
+    required
+    value={conditionScore}
+    onChange={(e) => setConditionScore(e.target.value)}
+    onBlur={() => {
+      setConditionScore((prev) => {
+        if (prev === "") return prev;
+        const n = Number(prev);
+        if (!Number.isFinite(n)) return "";
+        return String(Math.max(1, Math.min(10, Math.round(n))));
+      });
+    }}
+    list="conditionOptions"
+  />
+  <datalist id="conditionOptions">
+    {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
+      <option key={v} value={v} />
+    ))}
+  </datalist>
+
+  <p className="hintRow">
+    Sleepy Scale (1–10): 1 = Extremely beat • 10 = Brand new
+  </p>
+  <p className="hintRow">
+    <a
+      target="_blank"
+      rel="noopener noreferrer"
+      href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
+    >
+      Learn more about Sleepy Scale here
+    </a>
+  </p>
+</div>
 
             {/* Weight | Price */}
             <div className="field">
@@ -518,5 +627,45 @@ const styles = `
     h1 { font-size: 2rem; }
     .wrap { margin: 32px auto 80px; padding: 0 16px; }
     .grid2 { grid-template-columns: 1fr 1fr; gap: 16px 16px; }
+  }
+
+  /* Autocomplete (parity with Index/Edit pages) */
+  .pp-autocomplete { position: relative; }
+  .pp-suggest {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--cloud);
+    border-radius: 10px;
+    box-shadow: 0 10px 24px rgba(0,0,0,.08);
+    padding: 6px;
+    max-height: 280px;
+    overflow: auto;
+  }
+  .pp-suggest-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 14px;
+  }
+  .pp-suggest-item:hover,
+  .pp-suggest-item.is-active {
+    background: #f7fbfa;
+  }
+  .pp-suggest .pill {
+    font-size: 11px;
+    border: 1px solid var(--cloud);
+    padding: 2px 6px;
+    border-radius: 999px;
+    color: var(--storm);
+    background: #fff;
   }
 `;
