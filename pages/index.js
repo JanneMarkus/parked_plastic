@@ -8,6 +8,7 @@ import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { getBlurDataURL } from "@/lib/blurClient";
 import GlobalStyles from "@/components/GlobalStyles";
 import PlaceholderDisc from "@/components/PlaceholderDisc";
+import { BRANDS, FEATURED, computeBrandSuggestions } from "@/data/brands";
 
 const supabase = getSupabaseBrowser();
 
@@ -32,44 +33,6 @@ const CONDITION_OPTIONS = [
   "Used",
   "Beat",
 ];
-
-// --- Brand lists (edit anytime) ---
-const TOP_13 = [
-  "Axiom",
-  "Discmania",
-  "Discraft",
-  "Dynamic Discs",
-  "Gateway",
-  "Infinite Discs",
-  "Innova",
-  "Kastaplast",
-  "Latitude 64",
-  "MVP",
-  "Prodigy",
-  "Streamline",
-  "Westside Discs",
-];
-
-const TOP_30 = [
-  ...TOP_13,
-  "DGA",
-  "Clash Discs",
-  "Thought Space Athletics",
-  "Lone Star Discs",
-  "Mint Discs",
-  "RPM Discs",
-  "Prodiscus",
-  "Divergent Discs",
-  "Disc Golf UK",
-  "Loft Discs",
-  "Viking Discs",
-  "Birdie",
-  "Doombird (team)",
-  "Millennium",
-  "Kastaplast (Old Run)",
-  "Alpha Discs",
-  "EV-7",
-]; // keep unique; add/remove freely
 
 const CAD = new Intl.NumberFormat("en-CA", {
   style: "currency",
@@ -202,31 +165,10 @@ export default function Home() {
   const [brandOpen, setBrandOpen] = useState(false);
   const [brandHighlight, setBrandHighlight] = useState(-1); // keyboard focus index
 
-  const brandSuggestions = useMemo(() => {
-    const q = brand.trim().toLowerCase();
-    if (!q) return [...TOP_13, "Other"];
-
-    const uniq = (arr) => Array.from(new Set(arr));
-
-    const starts = TOP_30.filter((b) => b.toLowerCase().startsWith(q));
-    const contains = TOP_30.filter(
-      (b) => !starts.includes(b) && b.toLowerCase().includes(q)
-    );
-
-    const topStarts = starts.filter((b) => TOP_13.includes(b));
-    const restStarts = starts.filter((b) => !TOP_13.includes(b));
-    const topContains = contains.filter((b) => TOP_13.includes(b));
-    const restContains = contains.filter((b) => !TOP_13.includes(b));
-
-    const results = uniq([
-      ...topStarts,
-      ...restStarts,
-      ...topContains,
-      ...restContains,
-    ]).slice(0, 12);
-
-    return [...results, "Other"];
-  }, [brand]);
+  const brandSuggestions = useMemo(
+    () => computeBrandSuggestions(brand),
+    [brand]
+  );
 
   const onBrandFocus = () => setBrandOpen(true);
   const onBrandBlur = () => {
@@ -327,12 +269,12 @@ export default function Home() {
         const brandClean = brand.trim();
         if (brandClean) {
           if (brandClean.toLowerCase() === "other") {
-            // “Other” = anything NOT in the TOP_30 list
-            // (keeps null/empty brands, which are also “not in top 30”)
+            // “Other” = anything NOT in the BRANDS list
+            // (keeps null/empty brands, which are also “not in list”)
             query = query.not(
               "brand",
               "in",
-              `(${TOP_30.map((b) => `"${b.replace(/"/g, '\\"')}"`).join(",")})`
+              `(${BRANDS.map((b) => `"${b.replace(/"/g, '\\"')}"`).join(",")})`
             );
           } else {
             // Normal brand filter (case-insensitive)
@@ -624,7 +566,7 @@ export default function Home() {
                           onMouseEnter={() => setBrandHighlight(i)}
                         >
                           {name}
-                          {TOP_13.includes(name)}
+                          {FEATURED.includes(name)}
                         </li>
                       ))}
                     </ul>

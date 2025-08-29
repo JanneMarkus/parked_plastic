@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ImageUploader from "@/components/ImageUploader";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
+import { FEATURED, computeBrandSuggestions } from "@/data/brands";
 
 export async function getServerSideProps(ctx) {
   const supabase = createSupabaseServerClient({ req: ctx.req, res: ctx.res });
@@ -84,6 +85,53 @@ export default function EditListing({ initialUser, initialDisc }) {
   // UI state
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // --- Brand autocomplete state & logic (INSIDE EditListing) ---
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [brandHighlight, setBrandHighlight] = useState(-1); // keyboard focus index
+
+  const brandSuggestions = useMemo(
+    () => computeBrandSuggestions(brand),
+    [brand]
+  );
+
+  const onBrandFocus = () => setBrandOpen(true);
+  const onBrandBlur = () => {
+    // close after a tick so click can register
+    setTimeout(() => setBrandOpen(false), 80);
+  };
+  const chooseBrand = (name) => {
+    if (name === "Other") {
+      setBrand("Other");
+    } else {
+      setBrand(name);
+    }
+    setBrandOpen(false);
+    setBrandHighlight(-1);
+  };
+  const onBrandKeyDown = (e) => {
+    if (!brandOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      setBrandOpen(true);
+      return;
+    }
+    if (!brandOpen) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setBrandHighlight((i) => Math.min(i + 1, brandSuggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setBrandHighlight((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      if (brandHighlight >= 0 && brandHighlight < brandSuggestions.length) {
+        e.preventDefault();
+        chooseBrand(brandSuggestions[brandHighlight]);
+      }
+    } else if (e.key === "Escape") {
+      setBrandOpen(false);
+      setBrandHighlight(-1);
+    }
+  };
 
   // Number helpers for Turn control
   function toHalfStep(n) { return Math.round(n * 2) / 2; }
@@ -340,22 +388,54 @@ export default function EditListing({ initialUser, initialDisc }) {
             </div>
 
             {/* Brand | Mold */}
-            <div className="field">
-              <label htmlFor="brand">Brand</label>
+            <div className="field pp-autocomplete">
+              <label htmlFor="brand">Brand*</label>
               <input
                 id="brand"
                 type="text"
+                required
                 value={brand}
-                onChange={(e) => setBrand(e.target.value)}
+                onChange={(e) => { setBrand(e.target.value); setBrandOpen(true); }}
+                onFocus={onBrandFocus}
+                onBlur={onBrandBlur}
+                onKeyDown={onBrandKeyDown}
+                aria-autocomplete="list"
+                aria-expanded={brandOpen ? "true" : "false"}
+                aria-controls="brand-listbox"
                 placeholder="Innova, Discraft, MVP…"
                 autoComplete="off"
               />
+              {brandOpen && brandSuggestions.length > 0 && (
+                <ul
+                  id="brand-listbox"
+                  role="listbox"
+                  className="pp-suggest"
+                  aria-label="Brand suggestions"
+                >
+                  {brandSuggestions.map((name, i) => (
+                    <li
+                      key={name}
+                      role="option"
+                      aria-selected={i === brandHighlight}
+                      className={`pp-suggest-item ${i === brandHighlight ? "is-active" : ""}`}
+                      onMouseDown={(e) => e.preventDefault()}  // keep focus
+                      onClick={() => chooseBrand(name)}
+                      onMouseEnter={() => setBrandHighlight(i)}
+                    >
+                      {name}
+                      {FEATURED.includes(name)}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
+
             <div className="field">
-              <label htmlFor="mold">Mold</label>
+              <label htmlFor="mold">Mold*</label>
               <input
                 id="mold"
                 type="text"
+                required
                 value={mold}
                 onChange={(e) => setMold(e.target.value)}
                 placeholder="Destroyer, Buzzz, Hex…"
@@ -456,13 +536,14 @@ export default function EditListing({ initialUser, initialDisc }) {
               />
             </div>
             <div className="field">
-              <label htmlFor="condition">Condition (Sleepy Scale 1–10)</label>
+              <label htmlFor="condition">Condition (Sleepy Scale 1–10)*</label>
               <input
                 id="condition"
                 type="number"
                 min={1}
                 max={10}
                 step={1}
+                required
                 inputMode="numeric"
                 placeholder="e.g., 8"
                 value={conditionScore}
@@ -493,7 +574,7 @@ export default function EditListing({ initialUser, initialDisc }) {
             {/* Weight | Price */}
             <div className="field">
               <label htmlFor="weight">
-                Weight (g) <span className="hint">(optional)</span>
+                Weight (g)
               </label>
               <input
                 id="weight"
@@ -642,5 +723,45 @@ const styles = `
     h1 { font-size: 2rem; }
     .wrap { margin: 32px auto 80px; padding: 0 16px; }
     .grid2 { grid-template-columns: 1fr 1fr; gap: 16px 16px; }
+  }
+
+  /* Autocomplete (parity with Index page) */
+  .pp-autocomplete { position: relative; }
+  .pp-suggest {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--cloud);
+    border-radius: 10px;
+    box-shadow: 0 10px 24px rgba(0,0,0,.08);
+    padding: 6px;
+    max-height: 280px;
+    overflow: auto;
+  }
+  .pp-suggest-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 14px;
+  }
+  .pp-suggest-item:hover,
+  .pp-suggest-item.is-active {
+    background: #f7fbfa;
+  }
+  .pp-suggest .pill {
+    font-size: 11px;
+    border: 1px solid var(--cloud);
+    padding: 2px 6px;
+    border-radius: 999px;
+    color: var(--storm);
+    background: #fff;
   }
 `;
