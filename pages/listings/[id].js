@@ -533,7 +533,7 @@ const styles = `
     backdrop-filter: blur(2px); z-index: 2;
   }
   .soldBanner { color: #fff; background: rgba(20,27,77,0.9); }
-  .pendingBanner { color: #2b1c00; background: rgba(255,208,85,.95); border-color: rgba(0,0,0,0.06); box-shadow: 0 12px 28px rgba(232,176,46,0.35); }
+  .pendingBanner { color: #fff; background: rgba(20,27,77,0.9);; border-color: rgba(0,0,0,0.06); box-shadow: 0 12px 28px rgba(232,176,46,0.35); }
 
   /* Panel / details */
   .panel { background:#fff; border:1px solid var(--cloud); border-radius:12px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
