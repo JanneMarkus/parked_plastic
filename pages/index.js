@@ -25,15 +25,6 @@ const sourceSans = Source_Sans_3({
   variable: "--font-source",
 });
 
-const CONDITION_OPTIONS = [
-  "New",
-  "Like New",
-  "Excellent",
-  "Good",
-  "Used",
-  "Beat",
-];
-
 const CAD = new Intl.NumberFormat("en-CA", {
   style: "currency",
   currency: "CAD",
@@ -215,7 +206,7 @@ export default function Home() {
   const [maxPrice, setMaxPrice] = useState("");
   const [minWeight, setMinWeight] = useState("");
   const [maxWeight, setMaxWeight] = useState("");
-  const [includeSold, setIncludeSold] = useState(false);
+  const [includePending, setIncludePending] = useState(false);
   const [onlyGlow, setOnlyGlow] = useState(false);
   const [excludeInked, setExcludeInked] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -246,8 +237,8 @@ export default function Home() {
           )
           .order("created_at", { ascending: false });
 
-        // Status filter: exclude sold unless toggled in
-        if (!includeSold) query = query.neq("status", "sold");
+        // Status filter: exclude pending unless toggled in
+        if (!includePending) query = query.neq("status", "pending");
 
         if (onlyGlow) query = query.eq("is_glow", true);
         if (excludeInked) query = query.neq("is_inked", true); // includes NULL + false
@@ -366,7 +357,7 @@ export default function Home() {
     turnMax,
     fadeMin,
     fadeMax,
-    includeSold,
+    includePending,
     onlyGlow,
     excludeInked,
   ]);
@@ -401,7 +392,7 @@ export default function Home() {
       maxPrice !== "" ? "maxPrice" : "",
       minWeight !== "" ? "minWeight" : "",
       maxWeight !== "" ? "maxWeight" : "",
-      includeSold ? "includeSold" : "",
+      includePending ? "includePending" : "",
       onlyGlow ? "onlyGlow" : "",
       excludeInked ? "excludeInked" : "",
       debouncedSearch.trim() ? "q" : "",
@@ -435,7 +426,7 @@ export default function Home() {
     fadeMin,
     fadeMax,
     debouncedSearch,
-    includeSold,
+    includePending,
   ]);
 
   function resetFilters() {
@@ -456,7 +447,7 @@ export default function Home() {
     setTurnMax("");
     setFadeMin("");
     setFadeMax("");
-    setIncludeSold(false);
+    setIncludePending(false);
     setOnlyGlow(false);
     setExcludeInked(false);
   }
@@ -676,10 +667,10 @@ export default function Home() {
                   <label className="checkbox">
                     <input
                       type="checkbox"
-                      checked={includeSold}
-                      onChange={(e) => setIncludeSold(e.target.checked)}
+                      checked={includePending}
+                      onChange={(e) => setIncludePending(e.target.checked)}
                     />
-                    Include sold listings
+                    Include pending listings
                   </label>
                   <label className="checkbox">
                     <input
