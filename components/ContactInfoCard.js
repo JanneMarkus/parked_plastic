@@ -2,9 +2,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
-
-const supabase = getSupabaseBrowser();
 
 export default function ContactInfoCard({ userId }) {
   const [initial, setInitial] = useState({ public_email: "", phone: "", messenger: "" });
@@ -21,40 +18,67 @@ export default function ContactInfoCard({ userId }) {
     [form, initial]
   );
 
+  function redirectToLogin() {
+    const redirect =
+      typeof window !== "undefined" ? encodeURIComponent(window.location.pathname) : "/account";
+    window.location.replace(`/login?redirect=${redirect}`);
+  }
+
   useEffect(() => {
-  let active = true;
-  (async () => {
-    if (!userId) {
-      if (active) {
-        setInitial({ public_email: "", phone: "", messenger: "" });
-        setForm({ public_email: "", phone: "", messenger: "" });
-        setLoading(false);
-        setMsg({ kind: "", text: "" });
+    let active = true;
+
+    (async () => {
+      // If no userId (shouldn’t happen on SSR-gated pages), reset and stop.
+      if (!userId) {
+        if (active) {
+          setInitial({ public_email: "", phone: "", messenger: "" });
+          setForm({ public_email: "", phone: "", messenger: "" });
+          setLoading(false);
+          setMsg({ kind: "", text: "" });
+        }
+        return;
       }
-      return;
-    }
-    setLoading(true);
-    setMsg({ kind: "", text: "" });
+
+      setLoading(true);
       setMsg({ kind: "", text: "" });
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("public_email, phone, messenger")
-        .eq("id", userId)
-        .maybeSingle();
-      if (!active) return;
-      if (error) {
-        setMsg({ kind: "error", text: error.message || "Failed to load contact info." });
-      } else {
+
+      try {
+        const res = await fetch("/api/profile/get", {
+          method: "GET",
+          credentials: "include",
+          headers: { "Accept": "application/json" },
+        });
+
+        if (res.status === 401) {
+          redirectToLogin();
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error((await res.json().catch(() => ({})))?.error || "Failed to load contact info.");
+        }
+
+        const json = await res.json();
+        const data = json?.data || {};
         const base = {
-          public_email: data?.public_email || "",
-          phone: data?.phone || "",
-          messenger: data?.messenger || "",
+          public_email: data.public_email || "",
+          phone: data.phone || "",
+          messenger: data.messenger || "",
         };
-        setInitial(base);
-        setForm(base);
+
+        if (active) {
+          setInitial(base);
+          setForm(base);
+        }
+      } catch (error) {
+        if (active) {
+          setMsg({ kind: "error", text: error?.message || "Failed to load contact info." });
+        }
+      } finally {
+        if (active) setLoading(false);
       }
-      setLoading(false);
     })();
+
     return () => {
       active = false;
     };
@@ -87,17 +111,32 @@ export default function ContactInfoCard({ userId }) {
 
     setSaving(true);
     setMsg({ kind: "", text: "" });
-    try {
-      const payload = {
-        public_email: form.public_email.trim() || null,
-        phone: form.phone.trim() || null,
-        messenger: form.messenger.trim() || null,
-      };
-      const { error } = await supabase
-  .from("profiles")
-  .upsert({ id: userId, ...payload }, { onConflict: "id" });
-      if (error) throw error;
 
+    // Prepare payload (use nulls so server can clear fields)
+    const payload = {
+      public_email: form.public_email.trim() || null,
+      phone: form.phone.trim() || null,
+      messenger: form.messenger.trim() || null,
+    };
+
+    try {
+      const res = await fetch("/api/profile/save", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error((await res.json().catch(() => ({})))?.error || "Failed to save.");
+      }
+
+      // Success → sync initial state
       setInitial({
         public_email: payload.public_email || "",
         phone: payload.phone || "",
@@ -116,7 +155,8 @@ export default function ContactInfoCard({ userId }) {
       <div style={{ marginBottom: "12px" }}>
         <h2 style={{ margin: 0 }}>Contact Info</h2>
         <p style={{ color: "var(--char)", opacity: 0.85, margin: 0, fontSize: ".95rem" }}>
-          Note: These details will show publicly on your listings behind a "reveal contact options" button. Leave blank to hide a channel.
+          Note: These details will show publicly on your listings behind a "reveal contact options" button.
+          Leave blank to hide a channel.
         </p>
       </div>
 
@@ -170,12 +210,8 @@ export default function ContactInfoCard({ userId }) {
               <div
                 className="pp-badge"
                 style={{
-                  background:
-                    msg.kind === "error" ? "#fff5f4" : "#f4fff9",
-                  border:
-                    msg.kind === "error"
-                      ? "1px solid #ffd9d5"
-                      : "1px solid #d1f5e5",
+                  background: msg.kind === "error" ? "#fff5f4" : "#f4fff9",
+                  border: msg.kind === "error" ? "1px solid #ffd9d5" : "1px solid #d1f5e5",
                   color: msg.kind === "error" ? "#8c2f28" : "#1a6a58",
                 }}
               >
