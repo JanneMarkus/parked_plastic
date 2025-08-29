@@ -139,7 +139,7 @@ export default function ContactSeller({
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(`${listingTitle} — ${listingUrl}`);
+      await navigator.clipboard.writeText(`${listingUrl}`);
       alert("Listing link copied!");
     } catch {
       alert("Couldn't copy. Long-press or right-click to copy the link.");
