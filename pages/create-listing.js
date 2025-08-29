@@ -2,15 +2,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { getSupabaseBrowser } from '@/lib/supabaseBrowser'
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ImageUploader from "@/components/ImageUploader";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
 
 /* --------------------------- Server-side auth gate --------------------------- */
-const supabase = getSupabaseBrowser()
-
 export async function getServerSideProps(ctx) {
-  // Use the shared server client (unified cookie flags; publishable key)
   const supabase = createSupabaseServerClient({ req: ctx.req, res: ctx.res });
 
   const { data, error } = await supabase.auth.getUser();
@@ -32,6 +29,9 @@ export async function getServerSideProps(ctx) {
 export default function CreateListing({ user }) {
   const router = useRouter();
 
+  // 👇 Create the browser client **inside** the component (client-only)
+  const [supabase] = useState(() => getSupabaseBrowser());
+
   // Flight numbers (REQUIRED)
   const [speed, setSpeed] = useState("");
   const [glide, setGlide] = useState("");
@@ -43,8 +43,8 @@ export default function CreateListing({ user }) {
   const [brand, setBrand] = useState("");
   const [mold, setMold] = useState("");
   const [plastic, setPlastic] = useState("");
-  const [conditionScore, setConditionScore] = useState(""); // 1–10 (Sleepy Scale)
-  const [weight, setWeight] = useState(""); // optional -> NULL if blank
+  const [conditionScore, setConditionScore] = useState(""); // 1–10
+  const [weight, setWeight] = useState("");
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
   const [isInked, setIsInked] = useState(false);
@@ -118,39 +118,45 @@ export default function CreateListing({ user }) {
 
     // Sleepy Scale condition (optional)
     const condNumRaw = conditionScore.trim() === "" ? null : Number(conditionScore);
-    if (condNumRaw !== null) {
-      if (!Number.isFinite(condNumRaw)) {
-        setErrorMsg("Condition must be a number 1–10.");
-        return;
-      }
+    if (condNumRaw !== null && !Number.isFinite(condNumRaw)) {
+      setErrorMsg("Condition must be a number 1–10.");
+      return;
     }
     const condNum = condNumRaw === null ? null : Math.max(1, Math.min(10, Math.round(condNumRaw)));
 
     setLoading(true);
     try {
-      const { error } = await supabase.from("discs").insert([
-        {
-          title: title.trim(),
-          brand: brand.trim() || null,
-          mold: mold.trim() || null,
-          plastic: plastic.trim() || null,
-          condition: condNum, // integer 1–10 (nullable)
-          weight: Number.isFinite(weightNum) ? weightNum : null,
-          price: Number.isFinite(priceNum) ? priceNum : null,
-          description: description.trim() || null,
-          image_urls: imageUrls, // from uploader (already uploaded)
-          city: null,
-          owner: user.id,
-          is_sold: false,
-          speed: s,
-          glide: g,
-          turn: t,
-          fade: f,
-          is_inked: isInked,
-          is_glow: isGlow,
-        },
-      ]);
-      if (error) throw error;
+      // 🔐 Call your server route so RLS + owner assignment are guaranteed
+      const resp = await fetch("/api/discs/create", {
+        method: "POST",
+        credentials: "include", // send cookies
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          record: {
+            title: title.trim(),
+            brand: brand.trim() || null,
+            mold: mold.trim() || null,
+            plastic: plastic.trim() || null,
+            condition: condNum, // integer 1–10 (nullable)
+            weight: Number.isFinite(weightNum) ? weightNum : null,
+            price: Number.isFinite(priceNum) ? priceNum : null,
+            description: description.trim() || null,
+            image_urls: imageUrls, // from uploader (already uploaded)
+            city: null,
+            is_sold: false,
+            speed: s,
+            glide: g,
+            turn: t,
+            fade: f,
+            is_inked: isInked,
+            is_glow: isGlow,
+            // owner set on the server to user.id via your API route
+          },
+        }),
+      });
+
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json?.error || "Failed to create listing");
 
       alert("Listing created!");
       router.replace("/");
@@ -195,8 +201,8 @@ export default function CreateListing({ user }) {
             <div className="field span2">
               <label>Images</label>
               <ImageUploader
-                supabase={supabase}
-                userId={user.id}
+                supabase={supabase}   // ✅ browser client
+                userId={user.id}      // ✅ auth user id from GSSP
                 bucket="listing-images"
                 maxFiles={10}
                 maxFileMB={12}
@@ -477,7 +483,7 @@ const styles = `
   }
   .wrap { max-width: 960px; margin: 24px auto 80px; padding: 0 12px; background: var(--sea); }
   .titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--storm); letter-spacing: .5px; margin: 0; font-size: 1.6rem; }
+  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; color: --storm; letter-spacing: .5px; margin: 0; font-size: 1.6rem; }
   .subtle { color: var(--char); opacity: .85; margin: 0; }
   .statusRegion { min-height: 22px; margin-bottom: 8px; }
   .error, .info { border-radius: 10px; padding: 10px 12px; font-size: .95rem; margin: 8px 0; }

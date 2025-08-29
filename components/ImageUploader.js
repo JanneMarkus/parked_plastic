@@ -8,8 +8,7 @@ import { useEffect, useRef, useState } from "react";
  * USAGE
  * -----
  * <ImageUploader
- *    supabase={supabase}
- *    userId={currentUser.id}
+ *    supabase={supabase}          // browser client (no need for a session now)
  *    bucket="listing-images"
  *    maxFiles={10}
  *    maxFileMB={12}
@@ -22,7 +21,6 @@ import { useEffect, useRef, useState } from "react";
 
 export default function ImageUploader({
   supabase,
-  userId,
   bucket = "listing-images",
   maxFiles = 10,
   maxFileMB = 12,
@@ -87,7 +85,6 @@ export default function ImageUploader({
         let sx = Math.max(0, Math.min(cx - Math.floor(cropW/2), w - cropW));
         let sy = Math.max(0, Math.min(cy - Math.floor(cropH/2), h - cropH));
 
-        // target dimensions (respect maxEdge)
         const curMax = Math.max(
           rotate % 180 !== 0 ? cropH : cropW,
           rotate % 180 !== 0 ? cropW : cropH
@@ -97,12 +94,10 @@ export default function ImageUploader({
         const tw = Math.max(1, Math.round((rotate % 180 !== 0 ? cropH : cropW) * scale));
         const th = Math.max(1, Math.round((rotate % 180 !== 0 ? cropW : cropH) * scale));
 
-        // First offscreen: crop region
         const off1 = new OffscreenCanvas(cropW, cropH);
         const o1 = off1.getContext('2d', { alpha: false });
         o1.drawImage(bitmap, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
 
-        // Second offscreen: rotate + object-fit: cover to tw x th
         const off2 = new OffscreenCanvas(tw, th);
         const o2 = off2.getContext('2d', { alpha: false });
         o2.translate(tw/2, th/2);
@@ -159,24 +154,15 @@ export default function ImageUploader({
     });
   }
 
-  // ---- Upload with fallback to signed upload URL (mobile-friendly) ----
-  async function uploadWithRetries({
+  // ---- Upload using server-authored signed URL (RLS-safe) ----
+  async function uploadViaServerSignedUrl({
     supabase,
     bucket,
-    userId,
     file,
-    timeoutMs = 30000, // slightly higher to avoid false timeouts on slower devices
+    timeoutMs = 30000,
     maxRetries = 3,
-    onProgress, // (p: 0..1, meta)
+    onProgress,
   }) {
-    const now = new Date();
-    const base = `${userId}/${now.getFullYear()}/${String(
-      now.getMonth() + 1
-    ).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${Date.now()}-${Math
-      .random()
-      .toString(36)
-      .slice(2)}`;
-
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const withTimeout = (p, ms) =>
       new Promise((resolve, reject) => {
@@ -191,7 +177,6 @@ export default function ImageUploader({
       });
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const key = `${base}-a${attempt}.jpg`;
       let tick = null;
       try {
         if (onProgress) {
@@ -203,44 +188,41 @@ export default function ImageUploader({
           }, 600);
         }
 
-        // Primary path
-        const primary = await withTimeout(
-          supabase.storage.from(bucket).upload(key, file, {
-            upsert: false,
-            cacheControl: "31536000, immutable",
-            contentType: "image/jpeg",
+        // 1) Ask the server (with cookies) for a signed upload URL + key
+        const resp = await withTimeout(
+          fetch("/api/storage/sign-upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bucket, contentType: "image/jpeg" }),
+            credentials: "include", // send cookies
           }),
           timeoutMs
         );
-        if (primary?.error) throw primary.error;
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err?.error || `Sign URL failed (HTTP ${resp.status})`);
+        }
+        const { key, token, publicUrl } = await resp.json();
 
-        const { data: pub } = supabase.storage.from(bucket).getPublicUrl(key);
-        if (tick) clearInterval(tick);
-        return { url: pub?.publicUrl || null, key };
-      } catch (err) {
-        // Fallback path: signed URL PUT
-        try {
-          const key2 = `${base}-a${attempt}-signed.jpg`;
-          const mk = await supabase.storage.from(bucket).createSignedUploadUrl(key2);
-          if (mk?.error) throw mk.error;
-
-          const up = await supabase.storage
+        // 2) Upload the file to the signed URL using Supabase client helper
+        const up = await withTimeout(
+          supabase.storage
             .from(bucket)
-            .uploadToSignedUrl(key2, mk.data.token, file, {
+            .uploadToSignedUrl(key, token, file, {
               contentType: "image/jpeg",
               upsert: false,
-            });
-          if (up?.error) throw up.error;
+            }),
+          timeoutMs
+        );
+        if (up?.error) throw up.error;
 
-          const { data: pub } = supabase.storage.from(bucket).getPublicUrl(key2);
-          return { url: pub?.publicUrl || null, key: key2 };
-        } catch (fallbackErr) {
-          if (attempt >= maxRetries) throw fallbackErr || err;
-          if (tick) clearInterval(tick);
-          await sleep(800 * attempt);
-        } finally {
-          if (tick) clearInterval(tick);
-        }
+        if (tick) clearInterval(tick);
+        // Return the public URL and the storage key for later reference
+        return { url: publicUrl || null, key };
+      } catch (err) {
+        if (attempt >= maxRetries) throw err;
+        if (tick) clearInterval(tick);
+        await sleep(800 * attempt);
       }
     }
     throw new Error("Upload failed after retries");
@@ -339,10 +321,9 @@ export default function ImageUploader({
           )
         );
 
-        const { url, key } = await uploadWithRetries({
+        const { url, key } = await uploadViaServerSignedUrl({
           supabase,
           bucket,
-          userId,
           file: uploadFile,
           onProgress: (p, meta) => {
             setItems((cur) =>
@@ -472,10 +453,9 @@ export default function ImageUploader({
         cur.map((x, i) => (i === idx ? { ...x, status: "uploading", progress: 60 } : x))
       );
 
-      const { url, key } = await uploadWithRetries({
+      const { url, key } = await uploadViaServerSignedUrl({
         supabase,
         bucket,
-        userId,
         file: uploadFile,
       });
 
@@ -517,7 +497,7 @@ export default function ImageUploader({
   useEffect(() => {
     onChange && onChange(items);
     setOverall(recomputeOverall(items));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exmount
   }, [items]);
 
   // ---------- Live preview renderer (canvas) ----------
@@ -931,14 +911,7 @@ function ProgressRing({ value = 0, size = 44, stroke = 4 }) {
       viewBox={`0 0 ${size} ${size}`}
       aria-label={`Progress ${value}%`}
     >
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        stroke="#E9E9E9"
-        strokeWidth={stroke}
-        fill="none"
-      />
+      <circle cx={size / 2} cy={size / 2} r={radius} stroke="#E9E9E9" strokeWidth={stroke} fill="none" />
       <circle
         cx={size / 2}
         cy={size / 2}

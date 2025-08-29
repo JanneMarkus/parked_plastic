@@ -6,8 +6,6 @@ import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ImageUploader from "@/components/ImageUploader";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
 
-const supabase = getSupabaseBrowser();
-
 export async function getServerSideProps(ctx) {
   const supabase = createSupabaseServerClient({ req: ctx.req, res: ctx.res });
 
@@ -52,6 +50,9 @@ export async function getServerSideProps(ctx) {
 export default function EditListing({ initialUser, initialDisc }) {
   const router = useRouter();
 
+  // ✅ Create the browser Supabase client in-component (client-only)
+  const [supabase] = useState(() => getSupabaseBrowser());
+
   // Gate & fetch
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -85,12 +86,8 @@ export default function EditListing({ initialUser, initialDisc }) {
   const [saving, setSaving] = useState(false);
 
   // Number helpers for Turn control
-  function toHalfStep(n) {
-    return Math.round(n * 2) / 2;
-  }
-  function clamp(val, min, max) {
-    return Math.max(min, Math.min(max, val));
-  }
+  function toHalfStep(n) { return Math.round(n * 2) / 2; }
+  function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
   function parseLocaleNumber(v) {
     const s = String(v).replace("−", "-").replace(",", ".");
     const n = Number(s);
@@ -101,6 +98,14 @@ export default function EditListing({ initialUser, initialDisc }) {
       const cur = prev === "" ? 0 : parseLocaleNumber(prev) || 0;
       const next = clamp(toHalfStep(cur + delta), -5, 1);
       return String(next);
+    });
+  }
+  function sanitizeTurn() {
+    setTurn((prev) => {
+      if (prev === "") return prev;
+      const n = parseLocaleNumber(prev);
+      if (!Number.isFinite(n)) return "";
+      return String(clamp(toHalfStep(n), -5, 1));
     });
   }
 
@@ -138,16 +143,7 @@ export default function EditListing({ initialUser, initialDisc }) {
     setLoading(false);
   }, [initialUser, initialDisc]);
 
-  function sanitizeTurn() {
-    setTurn((prev) => {
-      if (prev === "") return prev;
-      const n = parseLocaleNumber(prev);
-      if (!Number.isFinite(n)) return "";
-      return String(clamp(toHalfStep(n), -5, 1));
-    });
-  }
-
-  // ---------- Save ----------
+  // ---------- Save via server API (enforces RLS + returns updated row) ----------
   async function onSave(e) {
     e.preventDefault();
     setErrorMsg("");
@@ -220,30 +216,40 @@ export default function EditListing({ initialUser, initialDisc }) {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("discs")
-        .update({
-          title: title.trim(),
-          brand: brand.trim() || null,
-          mold: mold.trim() || null,
-          plastic: plastic.trim() || null,
-          condition: condNum,
-          weight: Number.isFinite(weightNum) ? weightNum : null,
-          price: Number.isFinite(priceNum) ? priceNum : null,
-          city: city.trim() || null,
-          description: description.trim() || null,
-          image_urls: finalImageUrls,
-          status: cleanStatus,
-          speed: s,
-          glide: g,
-          turn: t,
-          fade: f,
-          is_inked: isInked,
-          is_glow: isGlow,
-        })
-        .eq("id", disc.id);
+      // 🔐 Use API to update; ownership enforced server-side (.eq owner)
+      const resp = await fetch("/api/discs/update", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: disc.id,
+          patch: {
+            title: title.trim(),
+            brand: brand.trim() || null,
+            mold: mold.trim() || null,
+            plastic: plastic.trim() || null,
+            condition: condNum,
+            weight: Number.isFinite(weightNum) ? weightNum : null,
+            price: Number.isFinite(priceNum) ? priceNum : null,
+            city: city.trim() || null,
+            description: description.trim() || null,
+            image_urls: finalImageUrls,
+            status: cleanStatus,
+            speed: s,
+            glide: g,
+            turn: t,
+            fade: f,
+            is_inked: isInked,
+            is_glow: isGlow,
+          },
+        }),
+      });
 
-      if (error) throw error;
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json?.error || "Failed to save changes.");
+
+      // Optionally update local disc state with returned row
+      if (json?.data) setDisc(json.data);
 
       alert("Saved!");
       router.push("/account");
@@ -271,41 +277,25 @@ export default function EditListing({ initialUser, initialDisc }) {
         </Head>
         <p className="center muted">Loading…</p>
         <style jsx>{`
-          .wrap {
-            max-width: 960px;
-            margin: 32px auto;
-            padding: 0 16px;
-          }
-          .center {
-            text-align: center;
-            margin-top: 40px;
-          }
-          .muted {
-            color: #3a3a3a;
-            opacity: 0.85;
-          }
+          .wrap { max-width: 960px; margin: 32px auto; padding: 0 16px; }
+          .center { text-align: center; margin-top: 40px; }
+          .muted { color: #3a3a3a; opacity: 0.85; }
         `}</style>
       </main>
     );
   }
-  // user is guaranteed by SSR; no null return needed
 
   return (
     <main className="wrap">
       <Head>
         <title>Edit Listing — Parked Plastic</title>
-        <meta
-          name="description"
-          content="Edit your Parked Plastic disc listing."
-        />
+        <meta name="description" content="Edit your Parked Plastic disc listing." />
       </Head>
       <style jsx>{styles}</style>
 
       <div className="titleRow">
         <h1>Edit Listing</h1>
-        <p className="subtle">
-          Make changes and save. Leave fields blank if not applicable.
-        </p>
+        <p className="subtle">Make changes and save. Leave fields blank if not applicable.</p>
       </div>
 
       {/* Errors / status */}
@@ -321,8 +311,8 @@ export default function EditListing({ initialUser, initialDisc }) {
               <label>Images</label>
               <ImageUploader
                 key={disc?.id || "edit-uploader"} // force remount when listing loads
-                supabase={supabase}
-                userId={user.id}
+                supabase={supabase}               // ✅ browser client
+                userId={user?.id}                 // ✅ auth user id
                 bucket="listing-images"
                 maxFiles={10}
                 maxFileMB={12}
@@ -331,9 +321,7 @@ export default function EditListing({ initialUser, initialDisc }) {
                 initialItems={(disc?.image_urls || []).map((url) => ({ url }))}
                 onChange={setImageItems}
               />
-              <p className="hintRow">
-                Photos update immediately when added/removed.
-              </p>
+              <p className="hintRow">Photos update immediately when added/removed.</p>
             </div>
 
             {/* Title */}
@@ -452,9 +440,7 @@ export default function EditListing({ initialUser, initialDisc }) {
                   />
                 </div>
               </div>
-              <p className="hintRow">
-                Use 0.5 increments. Example: 12 / 5 / -1 / 3
-              </p>
+              <p className="hintRow">Use 0.5 increments. Example: 12 / 5 / -1 / 3</p>
             </div>
 
             {/* Plastic | Condition */}
@@ -652,5 +638,9 @@ const styles = `
   .checks { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
   .check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--storm); }
   .check input { transform: translateY(1px); }
-  @media (min-width: 768px) { h1 { font-size: 2rem; } .wrap { margin: 32px auto 80px; padding: 0 16px; } .grid2 { grid-template-columns: 1fr 1fr; gap: 16px 16px; } }
+  @media (min-width: 768px) {
+    h1 { font-size: 2rem; }
+    .wrap { margin: 32px auto 80px; padding: 0 16px; }
+    .grid2 { grid-template-columns: 1fr 1fr; gap: 16px 16px; }
+  }
 `;
