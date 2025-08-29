@@ -219,6 +219,12 @@ export default function Home() {
   const [fadeMin, setFadeMin] = useState("");
   const [fadeMax, setFadeMax] = useState("");
 
+  // NEW: Disc Type toggles
+  const [typeDriver, setTypeDriver] = useState(false);
+  const [typeFairway, setTypeFairway] = useState(false);
+  const [typeMidrange, setTypeMidrange] = useState(false);
+  const [typePutter, setTypePutter] = useState(false);
+
   // Blur placeholder cache
   const [blurs, setBlurs] = useState({});
   const prefetchingRef = useRef(false);
@@ -325,6 +331,17 @@ export default function Home() {
         if (fMax !== null && !Number.isNaN(fMax))
           query = query.lte("fade", fMax);
 
+        // NEW: Disc Type filters (by speed ranges)
+        // Putter: 0–3, Midrange: 4–5, Fairway: 6–9, Driver: 10–15
+        const typeClauses = [];
+        if (typePutter) typeClauses.push("and(speed.gte.0,speed.lte.3)");
+        if (typeMidrange) typeClauses.push("and(speed.gte.4,speed.lte.5)");
+        if (typeFairway) typeClauses.push("and(speed.gte.6,speed.lte.9)");
+        if (typeDriver) typeClauses.push("and(speed.gte.10,speed.lte.15)");
+        if (typeClauses.length > 0) {
+          query = query.or(typeClauses.join(","));
+        }
+
         const { data, error } = await query;
         if (error) throw error;
         if (!cancelled) setDiscs(data || []);
@@ -360,6 +377,10 @@ export default function Home() {
     includePending,
     onlyGlow,
     excludeInked,
+    typeDriver,
+    typeFairway,
+    typeMidrange,
+    typePutter,
   ]);
 
   // Prefetch blurDataURL
@@ -396,6 +417,8 @@ export default function Home() {
       onlyGlow ? "onlyGlow" : "",
       excludeInked ? "excludeInked" : "",
       debouncedSearch.trim() ? "q" : "",
+      // NEW: types
+      typeDriver || typeFairway || typeMidrange || typePutter ? "types" : "",
     ];
     const flight = [
       speedMin !== "" ? "sMin" : "",
@@ -427,6 +450,10 @@ export default function Home() {
     fadeMax,
     debouncedSearch,
     includePending,
+    typeDriver,
+    typeFairway,
+    typeMidrange,
+    typePutter,
   ]);
 
   function resetFilters() {
@@ -450,6 +477,10 @@ export default function Home() {
     setIncludePending(false);
     setOnlyGlow(false);
     setExcludeInked(false);
+    setTypeDriver(false);
+    setTypeFairway(false);
+    setTypeMidrange(false);
+    setTypePutter(false);
   }
 
   return (
@@ -458,7 +489,7 @@ export default function Home() {
         <title>Parked Plastic — Local Disc Listings</title>
         <meta
           name="description"
-          content="Browse used disc golf listings. Filter by brand, mold, condition, weight, and price — or search everything."
+          content="Browse used disc golf listings. Filter by brand, mold, condition, weight, price, type — or search everything."
         />
       </Head>
 
@@ -575,6 +606,46 @@ export default function Home() {
                     placeholder="Destroyer, Buzzz, Hex…"
                     autoComplete="off"
                   />
+                </div>
+
+                {/* NEW: Disc Type chips */}
+                <div className="pp-field">
+                  <label>Disc Type</label>
+                  <div className="chips">
+                    <button
+                      type="button"
+                      className={`chip ${typeDriver ? "is-active" : ""}`}
+                      onClick={() => setTypeDriver((v) => !v)}
+                      aria-pressed={typeDriver ? "true" : "false"}
+                    >
+                      Driver
+                    </button>
+                    <button
+                      type="button"
+                      className={`chip ${typeFairway ? "is-active" : ""}`}
+                      onClick={() => setTypeFairway((v) => !v)}
+                      aria-pressed={typeFairway ? "true" : "false"}
+                    >
+                      Fairway
+                    </button>
+                    <button
+                      type="button"
+                      className={`chip ${typeMidrange ? "is-active" : ""}`}
+                      onClick={() => setTypeMidrange((v) => !v)}
+                      aria-pressed={typeMidrange ? "true" : "false"}
+                    >
+                      Midrange
+                    </button>
+                    <button
+                      type="button"
+                      className={`chip ${typePutter ? "is-active" : ""}`}
+                      onClick={() => setTypePutter((v) => !v)}
+                      aria-pressed={typePutter ? "true" : "false"}
+                    >
+                      Putter
+                    </button>
+                  </div>
+                  <p className="hintRow">Based on speed: Putter 0–3 • Mid 4–5 • Fairway 6–9 • Driver 10–15</p>
                 </div>
 
                 {/* Sleepy Scale (Condition) */}
@@ -844,6 +915,33 @@ export default function Home() {
           justify-content: space-between;
           align-items: center;
           margin: 10px 4px 16px;
+        }
+
+        /* Chips */
+        .chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 6px;
+        }
+        .chip {
+          border: 1px solid var(--cloud);
+          background: #fff;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 13px;
+        }
+        .chip.is-active {
+          background: var(--tint, #ecf6f4);
+          border-color: var(--teal, #279989);
+          box-shadow: 0 0 0 2px rgba(39, 153, 137, 0.15) inset;
+        }
+        .hintRow {
+          color: #666;
+          font-size: .85rem;
+          margin-top: 4px;
         }
 
         /* ===== Cards (Account parity + small hover polish) ===== */
