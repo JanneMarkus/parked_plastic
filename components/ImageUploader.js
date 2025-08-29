@@ -62,6 +62,19 @@ export default function ImageUploader({
   const [editorBitmap, setEditorBitmap] = useState(null); // decoded for live preview
   const previewCanvasRef = useRef(null);
 
+  // 🔒 Lock page scroll when modal is open
+  useEffect(() => {
+    if (!showEditor) return;
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBody = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
+  }, [showEditor]);
+
   // ---------- Inline Worker for final processing ----------
   const workerRef = useRef(null);
   useEffect(() => {
@@ -497,7 +510,7 @@ export default function ImageUploader({
   useEffect(() => {
     onChange && onChange(items);
     setOverall(recomputeOverall(items));
-    // eslint-disable-next-line react-hooks/exmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
   // ---------- Live preview renderer (canvas) ----------
@@ -659,80 +672,91 @@ export default function ImageUploader({
 
       {/* Editor Modal with LIVE preview */}
       {showEditor && (
-        <dialog open className="pp-modal" aria-label="Edit photo">
-          <div className="pp-modal-inner">
-            <div className="canvasWrap">
-              <canvas ref={previewCanvasRef} width={800} height={600} aria-label="Live preview" />
-            </div>
-            <div className="controls">
-              <label>
-                Rotate 90°
-                <button
-                  type="button"
-                  className="btn sm"
-                  onClick={() =>
-                    setEditorState((s) => ({
-                      ...s,
-                      rotate: (s.rotate + 90) % 360,
-                    }))
-                  }
-                >
-                  Rotate
+        <div
+          className="pp-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit photo"
+          onClick={(e) => {
+            // close when clicking outside the modal card
+            if (e.target.classList.contains("pp-overlay")) closeEditor();
+          }}
+        >
+          <div className="pp-modal" role="document">
+            <div className="pp-modal-inner">
+              <div className="canvasWrap">
+                <canvas ref={previewCanvasRef} width={800} height={600} aria-label="Live preview" />
+              </div>
+              <div className="controls">
+                <label>
+                  Rotate 90°
+                  <button
+                    type="button"
+                    className="btn sm"
+                    onClick={() =>
+                      setEditorState((s) => ({
+                        ...s,
+                        rotate: (s.rotate + 90) % 360,
+                      }))
+                    }
+                  >
+                    Rotate
+                  </button>
+                </label>
+                <label>
+                  Zoom
+                  <input
+                    type="range"
+                    min="1"
+                    max="3"
+                    step="0.01"
+                    value={editorState.zoom}
+                    onChange={(e) =>
+                      setEditorState((s) => ({
+                        ...s,
+                        zoom: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Pan X
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={editorState.x}
+                    onChange={(e) =>
+                      setEditorState((s) => ({ ...s, x: Number(e.target.value) }))
+                    }
+                  />
+                </label>
+                <label>
+                  Pan Y
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={editorState.y}
+                    onChange={(e) =>
+                      setEditorState((s) => ({ ...s, y: Number(e.target.value) }))
+                    }
+                  />
+                </label>
+              </div>
+              <div className="actions">
+                <button type="button" className="btn btn-ghost" onClick={closeEditor}>
+                  Cancel
                 </button>
-              </label>
-              <label>
-                Zoom
-                <input
-                  type="range"
-                  min="1"
-                  max="3"
-                  step="0.01"
-                  value={editorState.zoom}
-                  onChange={(e) =>
-                    setEditorState((s) => ({
-                      ...s,
-                      zoom: Number(e.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Pan X
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={editorState.x}
-                  onChange={(e) =>
-                    setEditorState((s) => ({ ...s, x: Number(e.target.value) }))
-                  }
-                />
-              </label>
-              <label>
-                Pan Y
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={editorState.y}
-                  onChange={(e) =>
-                    setEditorState((s) => ({ ...s, y: Number(e.target.value) }))
-                  }
-                />
-              </label>
-            </div>
-            <div className="actions">
-              <button type="button" className="btn btn-ghost" onClick={closeEditor}>
-                Cancel
-              </button>
-              <button type="button" className="btn btn-primary" onClick={applyEditor}>
-                Apply
-              </button>
+                <button type="button" className="btn btn-primary" onClick={applyEditor}>
+                  Apply
+                </button>
+              </div>
             </div>
           </div>
-        </dialog>
+        </div>
       )}
 
       <style jsx>{`
@@ -858,13 +882,28 @@ export default function ImageUploader({
           right: 6px;
           bottom: 6px;
         }
+
+        /* ===== Top-layer modal overlay ===== */
+        .pp-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 10000; /* above everything else on your pages */
+          background: rgba(20, 27, 77, 0.55);
+          backdrop-filter: blur(2px);
+          display: grid;
+          place-items: center;
+          padding: 16px;
+        }
+
         .pp-modal {
           border: none;
           border-radius: 14px;
           padding: 0;
-          max-width: min(92vw, 560px);
+          width: min(92vw, 560px);
           background: #f8f7ec;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+          box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+          max-height: 90vh;
+          overflow: auto;
         }
         .pp-modal-inner {
           padding: 16px;
@@ -877,11 +916,31 @@ export default function ImageUploader({
           align-items: center;
           justify-content: center;
           overflow: hidden;
+          border-radius: 10px;
         }
         .canvasWrap canvas {
           width: 100%;
           height: 100%;
           display: block;
+        }
+        .controls {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr 1fr;
+          margin-top: 12px;
+        }
+        .controls label {
+          display: grid;
+          gap: 6px;
+          font-weight: 600;
+          color: var(--storm, #141b4d);
+          font-size: 0.9rem;
+        }
+        .actions {
+          display: flex;
+          gap: 10px;
+          justify-content: flex-end;
+          margin-top: 14px;
         }
       `}</style>
     </div>
