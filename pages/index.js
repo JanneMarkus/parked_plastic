@@ -1,5 +1,6 @@
 // pages/index.js
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/router";
 import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
@@ -146,11 +147,16 @@ function DualRange({
 }
 
 export default function Home() {
+  const router = useRouter();
   const [discs, setDiscs] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // NEW: seller filter state (from ?seller)
+  const [sellerName, setSellerName] = useState("");
+
   // Filters
   const [search, setSearch] = useState("");
+  const [seller, setSeller] = useState(""); // profiles.id from ?seller=
   const [brand, setBrand] = useState("");
   // --- Brand autocomplete state & logic (INSIDE Home) ---
   const [brandOpen, setBrandOpen] = useState(false);
@@ -231,6 +237,41 @@ export default function Home() {
 
   const debouncedSearch = useDebouncedValue(search, 450);
 
+  // Load seller from query on mount/change
+  useEffect(() => {
+    if (router.query?.seller) {
+      setSeller(router.query.seller);
+    }
+  }, [router.query?.seller]);
+
+  // Fetch seller display name for tag
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!seller) {
+        setSellerName("");
+        return;
+      }
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", seller)
+        .maybeSingle();
+      if (!cancelled) {
+        setSellerName(data?.full_name || "");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [seller]);
+
+  // Sync seller filter from the query string (?seller=<profileId>)
+  useEffect(() => {
+    const qsSeller = router.query?.seller;
+    setSeller(typeof qsSeller === "string" ? qsSeller : "");
+  }, [router.query?.seller]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -248,6 +289,11 @@ export default function Home() {
 
         if (onlyGlow) query = query.eq("is_glow", true);
         if (excludeInked) query = query.neq("is_inked", true); // includes NULL + false
+
+        // Seller filter (profiles.id stored in discs.owner)
+        if (seller.trim()) {
+          query = query.eq("owner", seller.trim());
+        }
 
         const term = debouncedSearch.trim();
         if (term) {
@@ -358,6 +404,7 @@ export default function Home() {
     };
   }, [
     debouncedSearch,
+    seller,
     brand,
     mold,
     minCondition,
@@ -405,6 +452,8 @@ export default function Home() {
 
   const activeFiltersCount = useMemo(() => {
     const basics = [
+      // Count seller so Reset shows when ?seller=<id> is present
+      seller.trim() ? "seller" : "",
       brand.trim(),
       mold.trim(),
       minCondition !== "" ? "cMin" : "",
@@ -432,6 +481,7 @@ export default function Home() {
     ];
     return [...basics, ...flight].filter(Boolean).length;
   }, [
+    seller,
     brand,
     mold,
     minCondition,
@@ -458,6 +508,7 @@ export default function Home() {
 
   function resetFilters() {
     setSearch("");
+    setSeller("");
     setBrand("");
     setMold("");
     setMinCondition("");
@@ -481,6 +532,15 @@ export default function Home() {
     setTypeFairway(false);
     setTypeMidrange(false);
     setTypePutter(false);
+    // Strip ?seller from the URL (and keep other qs params intact)
+    if (router.query && "seller" in router.query) {
+      const { seller: _omit, ...rest } = router.query;
+      router.replace(
+        { pathname: router.pathname, query: rest },
+        undefined,
+        { shallow: true }
+      );
+    }
   }
 
   return (
@@ -521,6 +581,11 @@ export default function Home() {
                 />
               </div>
               <div className="bar-actions">
+                {seller && sellerName && (
+                  <span className="pp-badge pp-badge--teal">
++                    Showing {sellerName}&apos;s listings
+                  </span>
+                )}
                 {activeFiltersCount > 0 && (
                   <span
                     className="pp-badge pp-badge--coral"

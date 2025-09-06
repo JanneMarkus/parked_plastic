@@ -319,7 +319,15 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
               <div className="avatar" aria-hidden="true" />
             )}
             <div>
-              <div className="sellername">{seller?.full_name || "Seller"}</div>
+              <div className="sellername">
+                {seller?.id ? (
+                  <Link href={`/?seller=${seller.id}`} title="View this seller's listings">
+                    {seller.full_name || "Seller"}
+                  </Link>
+                ) : (
+                  seller?.full_name || "Seller"
+                )}
+              </div>
               <div className="muted">Posted {new Date(disc.created_at).toLocaleDateString()}</div>
             </div>
           </div>
