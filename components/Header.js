@@ -14,6 +14,10 @@ export default function Header() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState({ full_name: null, avatar_url: null });
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure server and pre-hydration client render the same markup
+  useEffect(() => { setMounted(true); }, []);
 
   // components/Header.js (only the auth bits need to change)
 useEffect(() => {
@@ -169,7 +173,7 @@ useEffect(() => {
           Post a Disc
         </button>
 
-        {user ? (
+        {mounted && user ? (
           <div className="account">
             <button
               type="button"
@@ -248,7 +252,7 @@ useEffect(() => {
 
           <div className="mobileDivider" />
 
-          {user ? (
+          {mounted && user ? (
             <>
               <div className="mobileUser">
                 <button
