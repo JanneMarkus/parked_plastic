@@ -312,24 +312,16 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
           </div>
 
           <div className="seller">
-            {seller?.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="avatar" src={seller.avatar_url} alt={seller.full_name || "Seller"} />
-            ) : (
-              <div className="avatar" aria-hidden="true" />
-            )}
-            <div>
-              <div className="sellername">
-                {seller?.id ? (
-                  <Link href={`/?seller=${seller.id}`} title="View this seller's listings">
-                    {seller.full_name || "Seller"}
-                  </Link>
-                ) : (
-                  seller?.full_name || "Seller"
-                )}
-              </div>
-              <div className="muted">Posted {new Date(disc.created_at).toLocaleDateString()}</div>
+            <div className="sellername">
+              {seller?.id ? (
+                <Link href={`/?seller=${seller.id}`} title="View this seller's listings">
+                  {seller.full_name || "Seller"}
+                </Link>
+              ) : (
+                seller?.full_name || "Seller"
+              )}
             </div>
+            <div className="muted">Posted {new Date(disc.created_at).toLocaleDateString()}</div>
           </div>
 
           <div className="ctaRow">
@@ -557,8 +549,7 @@ const styles = `
   .spec label { display:block; font-size: 12px; color: var(--storm); font-weight: 700; font-family:'Poppins', sans-serif; margin-bottom: 4px; }
   .spec div { font-size: 15px; color: var(--char); }
 
-  .seller { display:flex; align-items:center; gap:12px; margin-top: 14px; }
-  .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(0,0,0,0.05); background: var(--wave); }
+  .seller { display:flex; flex-direction:column; gap:2px; margin-top: 14px; }
   .sellername { font-weight: 700; color: var(--storm); }
   .muted { color:#666; font-size: 14px; }
 
