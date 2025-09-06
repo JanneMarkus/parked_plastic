@@ -9,6 +9,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { SessionContextProvider } from "@supabase/auth-helpers-react";
 import Script from "next/script";
 import { useRouter } from "next/router";
+import { ToastProvider } from "@/components/ToastProvider";
 
 
 const poppins = Poppins({
@@ -97,10 +98,12 @@ export default function MyApp({ Component, pageProps }) {
           supabaseClient={supabase}
           initialSession={pageProps?.initialSession}
         >
-          <GlobalStyles />
-          <Header />
-          <Component {...pageProps} />
-          <Analytics />
+          <ToastProvider>
+            <GlobalStyles />
+            <Header />
+            <Component {...pageProps} />
+            <Analytics />
+          </ToastProvider>
         </SessionContextProvider>
       </div>
     </>

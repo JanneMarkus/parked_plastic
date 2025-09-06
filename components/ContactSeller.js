@@ -1,5 +1,6 @@
 // components/ContactSeller.js
 import React, { useEffect, useMemo, useState } from "react";
+import { useToast } from "@/components/ToastProvider";
 import {
   MessageSquareText,
   Mail,
@@ -37,6 +38,7 @@ export default function ContactSeller({
   showCopy = true,
   size = "md",
 }) {
+  const toast = useToast();
   const [revealing, setRevealing] = useState(false);
   const [error, setError] = useState("");
   const [contact, setContact] = useState(null); // { public_email, phone, messenger }
@@ -140,9 +142,9 @@ export default function ContactSeller({
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(`${listingUrl}`);
-      alert("Listing link copied!");
+      toast.success("Listing link copied!"); // or toast.info / toast.error
     } catch {
-      alert("Couldn't copy. Long-press or right-click to copy the link.");
+      toast.error("Couldn't copy. Long-press or right-click to copy the link.");
     }
   };
 

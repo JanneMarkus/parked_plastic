@@ -1,5 +1,6 @@
 // pages/listings/[id]/edit.js
 import { useEffect, useMemo, useState } from "react";
+import { useToast } from "@/components/ToastProvider";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
@@ -54,6 +55,7 @@ export async function getServerSideProps(ctx) {
 }
 
 export default function EditListing({ initialUser, initialDisc }) {
+  const toast = useToast();
   const router = useRouter();
 
   // ✅ Create the browser Supabase client in-component (client-only)
@@ -310,7 +312,7 @@ export default function EditListing({ initialUser, initialDisc }) {
       // Optionally update local disc state with returned row
       if (json?.data) setDisc(json.data);
 
-      alert("Saved!");
+      toast.success("Saved!");
       router.push("/account");
     } catch (err) {
       // eslint-disable-next-line no-console

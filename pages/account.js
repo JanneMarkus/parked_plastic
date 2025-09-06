@@ -1,5 +1,6 @@
 // pages/account.js
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
+import { useToast } from "@/components/ToastProvider";
 import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
@@ -167,6 +168,7 @@ function ListingCard({ l, onToggleStatus, onDelete }) {
 /* ---------------------------------- Page ---------------------------------- */
 
 export default function Account({ user }) {
+  const toast = useToast();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -235,7 +237,7 @@ export default function Account({ user }) {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
-      alert("Failed to update status.");
+      toast.error("Failed to update status.");
       setListings(prev); // revert
     }
   }
@@ -258,7 +260,7 @@ export default function Account({ user }) {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
-      alert("Failed to delete.");
+      toast.error("Failed to delete.");
       setListings(prev); // revert
     }
   }

@@ -1,5 +1,6 @@
 // pages/create-listing.js
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
+import { useToast } from "@/components/ToastProvider";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
@@ -34,6 +35,7 @@ const fmt = (n) => (Number.isInteger(n) ? String(n) : String(n.toFixed(1)));
 /* ---------------------------------- Page ---------------------------------- */
 export default function CreateListing({ user }) {
   const router = useRouter();
+  const toast = useToast();
 
   // 👇 Create the browser client **inside** the component (client-only)
   const [supabase] = useState(() => getSupabaseBrowser());
@@ -210,7 +212,7 @@ export default function CreateListing({ user }) {
       const json = await resp.json();
       if (!resp.ok) throw new Error(json?.error || "Failed to create listing");
 
-      alert("Listing created!");
+      toast.success("Listing created!");
       router.replace("/");
     } catch (err) {
       console.error(err);

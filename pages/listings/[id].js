@@ -1,5 +1,6 @@
 // pages/listings/[id].js
 import { useMemo, useState } from "react";
+import { useToast } from "@/components/ToastProvider";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
@@ -50,6 +51,7 @@ export async function getServerSideProps(ctx) {
 
 export default function ListingDetail({ initialUser, initialDisc, initialSeller }) {
   const router = useRouter();
+  const toast = useToast();
   const { id } = router.query;
 
   // State from SSR (no client DB fetch)
@@ -129,6 +131,7 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
 
       if (!res.ok) throw new Error("Failed to send report.");
       setReportStatus("Thanks — your report was sent.");
+      toast.success("Thanks — your report was sent.");
       setReportDetails("");
       setReportEmail("");
       setReportReason("Spam / scam");
@@ -137,6 +140,7 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
       // eslint-disable-next-line no-console
       console.error(err);
       setReportStatus("Could not send the report. Please try again.");
+      toast.error("Could not send the report. Please try again.");
     } finally {
       setReportSending(false);
     }
