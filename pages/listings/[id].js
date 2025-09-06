@@ -33,7 +33,7 @@ export async function getServerSideProps(ctx) {
   if (disc.owner) {
     const { data: p } = await supabase
       .from("profiles")
-      .select("id, full_name, avatar_url, public_email, phone, messenger")
+      .select("id, full_name, public_email, phone, messenger")
       .eq("id", disc.owner)
       .maybeSingle();
     seller = p || null;
