@@ -337,10 +337,16 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
                     href="#contact"
                     onClick={(e) => {
                       const el = document.getElementById("contact");
-                      if (el) {
-                        e.preventDefault();
-                        el.scrollIntoView({ behavior: "smooth" });
-                      }
+                      if (!el) return;
+                      e.preventDefault();
+                      // Center it and always draw attention
+                      el.scrollIntoView({ behavior: "smooth", block: "center" });
+                      // Restart highlight animation
+                      el.classList.remove("is-highlight");
+                      void el.offsetWidth; // reflow to restart animation
+                      el.classList.add("is-highlight");
+                      // Clean up the class after the animation ends
+                      setTimeout(() => el.classList.remove("is-highlight"), 1200);
                     }}
                   >
                     {isPending ? "Contact seller (pending)" : "Contact seller"}
@@ -560,7 +566,27 @@ const styles = `
   .desc p { margin: 0; color: var(--char); }
 
   .chatwrap { background:#fff; border:1px solid var(--cloud); border-radius:12px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-top: 24px; }
-
+/* Attention pulse when user clicks "Contact seller" */
+  .chatwrap.is-highlight {
+    animation: contactGlow 1.2s ease-out;
+  }
+  @keyframes contactGlow {
+    0% {
+      box-shadow: 0 0 0 0 rgba(39,153,137,0.00), 0 0 0 0 rgba(39,153,137,0.00);
+      outline: 0 solid rgba(39,153,137,0.00);
+    }
+    18% {
+      outline: 3px solid var(--teal);
+      box-shadow: 0 0 0 6px rgba(39,153,137,0.25);
+    }
+    100% {
+      outline: 0 solid transparent;
+      box-shadow: 0 0 0 0 rgba(39,153,137,0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chatwrap.is-highlight { animation: none; outline: 3px solid var(--teal); }
+  }
   @media (min-width: 980px) {
     .top { grid-template-columns: 1.2fr 1fr; gap: 24px; }
     .title { font-size: 1.8rem; }
