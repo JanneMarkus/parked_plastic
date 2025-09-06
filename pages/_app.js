@@ -7,6 +7,9 @@ import { Poppins, Source_Sans_3 } from "next/font/google";
 import "@/styles/globals.css";
 import { Analytics } from "@vercel/analytics/react";
 import { SessionContextProvider } from "@supabase/auth-helpers-react";
+import Script from "next/script";
+import { useRouter } from "next/router";
+
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -25,6 +28,21 @@ const source = Source_Sans_3({
 const supabase = getSupabaseBrowser();
 
 export default function MyApp({ Component, pageProps }) {
+  const router = useRouter();
+
+  useEffect(() => {
+    const handleRouteChange = (url) => {
+      if (typeof window.gtag !== "function") return;
+      window.gtag("config", "G-NDXLRKC78C", {
+        page_path: url,
+      });
+    };
+    router.events.on("routeChangeComplete", handleRouteChange);
+    return () => {
+      router.events.off("routeChangeComplete", handleRouteChange);
+    };
+  }, [router.events]);
+
   useEffect(() => {
     const {
       data: { subscription },
@@ -57,16 +75,34 @@ export default function MyApp({ Component, pageProps }) {
   }, []);
 
   return (
-    <div className={`${poppins.variable} ${source.variable}`}>
-      <SessionContextProvider
-        supabaseClient={supabase}
-        initialSession={pageProps?.initialSession}
-      >
-        <GlobalStyles />
-        <Header />
-        <Component {...pageProps} />
-        <Analytics />
-      </SessionContextProvider>
-    </div>
+    
+    <>
+      <div className={`${poppins.variable} ${source.variable}`}>
+      {/* Google Analytics 4 */}
+      <Script
+        src={`https://www.googletagmanager.com/gtag/js?id=G-NDXLRKC78C`}
+        strategy="afterInteractive"
+      />
+      <Script id="ga-init" strategy="afterInteractive">
+        {`
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-NDXLRKC78C', {
+            page_path: window.location.pathname,
+          });
+        `}
+      </Script>
+        <SessionContextProvider
+          supabaseClient={supabase}
+          initialSession={pageProps?.initialSession}
+        >
+          <GlobalStyles />
+          <Header />
+          <Component {...pageProps} />
+          <Analytics />
+        </SessionContextProvider>
+      </div>
+    </>
   );
 }
