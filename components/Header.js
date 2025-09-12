@@ -15,19 +15,21 @@ export default function Header() {
   const [profile, setProfile] = useState({ full_name: null, avatar_url: null });
   const [menuOpen, setMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [authReady, setAuthReady] = useState(false); // SSR/CSR consistency gate
+  const [displayNameStable, setDisplayNameStable] = useState(null); // last known good name
 
   // Ensure server and pre-hydration client render the same markup
   useEffect(() => { setMounted(true); }, []);
 
   // components/Header.js (only the auth bits need to change)
 useEffect(() => {
-  let mounted = true;
+  let alive = true;
 
   async function refreshFromServerCookie() {
     try {
       const res = await fetch("/api/auth/user", { credentials: "include" });
       const j = await res.json();
-      if (!mounted) return;
+      if (!alive) return;
       const u = j?.user || null;
       setUser(u);
       if (u) {
@@ -46,25 +48,46 @@ useEffect(() => {
             null,
           avatar_url: p?.avatar_url || u?.user_metadata?.avatar_url || null,
         });
+        // Preserve a stable display label to prevent email "flash" on later refreshes
+          setDisplayNameStable((prev) => {
+            const next =
+              p?.full_name ||
+              u?.user_metadata?.full_name ||
+              u?.user_metadata?.name ||
+              (typeof u?.email === "string" ? u.email.split("@")[0] : null) ||
+              prev ||
+              null;
+            return next;
+          });
       } else {
         setProfile({ full_name: null, avatar_url: null });
       }
     } catch {
-      if (mounted) {
+      if (alive) {
         setUser(null);
         setProfile({ full_name: null, avatar_url: null });
       }
+    } finally {
+        if (alive) setAuthReady(true); // unblock rendering (SSR/CSR now aligned)
     }
   }
 
   // Initial read from server cookie (httpOnly)
   refreshFromServerCookie();
 
-  // Keep your existing onAuthStateChange (for client-initiated sign-in/out)
-  const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
-    // If you sign in on client and call setSession, this will keep things snappy
-    setUser(session?.user ?? null);
-  });
+  // Stay in sync for client-initiated changes and token refresh/expiry
+    const { data: sub } = supabase.auth.onAuthStateChange((evt, session) => {
+      // For long-idle tabs: defer to server cookie as truth when tab becomes visible.
+      // But keep UI snappy for explicit client events.
+      if (evt === "SIGNED_IN" || evt === "USER_UPDATED" || evt === "TOKEN_REFRESHED") {
+        setUser(session?.user ?? null);
+      }
+      if (evt === "SIGNED_OUT") {
+        setUser(null);
+        setProfile({ full_name: null, avatar_url: null });
+        setDisplayNameStable(null);
+      }
+    });
 
   // Also refresh when tab becomes visible (session may have rotated server-side)
   const onVis = () => {
@@ -73,17 +96,20 @@ useEffect(() => {
   document.addEventListener("visibilitychange", onVis);
 
   return () => {
-    mounted = false;
+    alive = false;
     sub?.subscription?.unsubscribe?.();
     document.removeEventListener("visibilitychange", onVis);
   };
 }, []);
 
   const displayName = useMemo(() => {
+    // Prefer stable, human-friendly name. Fall back to profile or email only after authReady.
+    if (displayNameStable) return displayNameStable;
+    if (!authReady) return ""; // avoid mismatched SSR/CSR text during first paint
     if (profile.full_name) return profile.full_name;
     if (user?.email) return user.email;
     return "User";
-  }, [profile.full_name, user?.email]);
+  }, [displayNameStable, authReady, profile.full_name, user?.email]);
 
   const initials = useMemo(() => {
     const source =
@@ -173,7 +199,7 @@ useEffect(() => {
           Post a Disc
         </button>
 
-        {mounted && user ? (
+        {authReady && user ? (
           <div className="account">
             <button
               type="button"
@@ -252,7 +278,7 @@ useEffect(() => {
 
           <div className="mobileDivider" />
 
-          {mounted && user ? (
+          {authReady && user ? (
             <>
               <div className="mobileUser">
                 <button
@@ -287,15 +313,9 @@ useEffect(() => {
                 Sign out
               </button>
             </>
-          ) : (
-            <Link
-              href="/login"
-              className="mobileLink"
-              onClick={() => setMenuOpen(false)}
-            >
-              Sign in
-            </Link>
-          )}
+          ) : authReady ? (
+          <Link href="/login" className="btnOutline desktopOnly">Sign in</Link>
+        ) : null}
         </div>
       </div>
 
