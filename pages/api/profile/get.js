@@ -10,7 +10,7 @@ export default async function handler(req, res) {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("public_email, phone, messenger")
+    .select("public_email, phone, messenger, home_course")
     .eq("id", user.id)
     .maybeSingle();
 

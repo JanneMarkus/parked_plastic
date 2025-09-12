@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 export default function ContactInfoCard({ userId }) {
-  const [initial, setInitial] = useState({ public_email: "", phone: "", messenger: "" });
-  const [form, setForm] = useState({ public_email: "", phone: "", messenger: "" });
+  const [initial, setInitial] = useState({ public_email: "", phone: "", messenger: "", home_course: "" });
+  const [form, setForm] = useState({ public_email: "", phone: "", messenger: "", home_course: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState({ kind: "", text: "" });
@@ -14,7 +14,8 @@ export default function ContactInfoCard({ userId }) {
     () =>
       form.public_email !== initial.public_email ||
       form.phone !== initial.phone ||
-      form.messenger !== initial.messenger,
+      form.messenger !== initial.messenger ||
+      form.home_course !== initial.home_course,
     [form, initial]
   );
 
@@ -31,8 +32,8 @@ export default function ContactInfoCard({ userId }) {
       // If no userId (shouldn’t happen on SSR-gated pages), reset and stop.
       if (!userId) {
         if (active) {
-          setInitial({ public_email: "", phone: "", messenger: "" });
-          setForm({ public_email: "", phone: "", messenger: "" });
+          setInitial({ public_email: "", phone: "", messenger: "", home_course: "" });
+          setForm({ public_email: "", phone: "", messenger: "", home_course: "" });
           setLoading(false);
           setMsg({ kind: "", text: "" });
         }
@@ -64,6 +65,7 @@ export default function ContactInfoCard({ userId }) {
           public_email: data.public_email || "",
           phone: data.phone || "",
           messenger: data.messenger || "",
+          home_course: data.home_course || "",
         };
 
         if (active) {
@@ -117,6 +119,7 @@ export default function ContactInfoCard({ userId }) {
       public_email: form.public_email.trim() || null,
       phone: form.phone.trim() || null,
       messenger: form.messenger.trim() || null,
+      home_course: form.home_course.trim() || null,
     };
 
     try {
@@ -141,6 +144,7 @@ export default function ContactInfoCard({ userId }) {
         public_email: payload.public_email || "",
         phone: payload.phone || "",
         messenger: payload.messenger || "",
+        home_course: payload.home_course || "",
       });
       setMsg({ kind: "info", text: "Saved!" });
     } catch (e) {
@@ -203,6 +207,20 @@ export default function ContactInfoCard({ userId }) {
                 autoComplete="off"
               />
             </div>
+
+            <div className="pp-field">
+              <label htmlFor="home_course">Home Course (best meet up spot)</label>
+              <input
+                id="home_course"
+                type="text"
+                className="pp-input"
+                placeholder="e.g., Birch Point, Confederation College..."
+                value={form.home_course}
+                onChange={(e) => setField("home_course", e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+
           </div>
 
           <div aria-live="polite" style={{ minHeight: "28px", marginBottom: "8px" }}>

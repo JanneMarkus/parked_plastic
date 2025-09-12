@@ -34,7 +34,7 @@ export async function getServerSideProps(ctx) {
   if (disc.owner) {
     const { data: p } = await supabase
       .from("profiles")
-      .select("id, full_name, public_email, phone, messenger")
+      .select("id, full_name, public_email, phone, messenger, home_course")
       .eq("id", disc.owner)
       .maybeSingle();
     seller = p || null;
@@ -388,6 +388,7 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
             allowSMS={true}
             showCopy={true}
             size="md"
+            homeCourse={seller?.home_course || null}
           />
         </section>
       )}

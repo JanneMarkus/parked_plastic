@@ -37,6 +37,7 @@ export default function ContactSeller({
   allowSMS = true,
   showCopy = true,
   size = "md",
+  homeCourse = null,
 }) {
   const toast = useToast();
   const [revealing, setRevealing] = useState(false);
@@ -232,6 +233,29 @@ export default function ContactSeller({
           font-size: 0.9rem;
         }
 
+        .cs-extra {
+          margin-top: 10px;
+          padding: 10px 12px;
+          background: #fff;
+          border: 1px solid var(--cloud, #e9e9e9);
+          border-radius: 10px;
+        }
+        .cs-extra .row {
+          display: grid;
+          grid-template-columns: 140px 1fr;
+          gap: 8px;
+          align-items: baseline;
+        }
+        .cs-extra label {
+          font-weight: 700;
+          color: var(--storm, #141b4d);
+          font-size: 0.9rem;
+        }
+        .cs-extra .value {
+          color: var(--char, #3a3a3a);
+          font-size: 0.95rem;
+        }
+
         .empty,
         .errorMsg {
           display: flex;
@@ -338,12 +362,31 @@ export default function ContactSeller({
                 Tip: On mobile these open your apps; on desktop they use your
                 default handlers.
               </p>
+              {(contact?.home_course || homeCourse) && (
+                <div className="cs-extra" role="note" aria-live="polite">
+                  <div className="row">
+                    <label>Home Course</label>
+                    <div className="value">
+                      {contact?.home_course || homeCourse}
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="empty" role="note" aria-live="polite">
               <Info size={16} aria-hidden />
               The seller hasn’t added public contact info yet. But you can copy
               the listing link and contact them directly.
+            </div>
+          )}
+          {/* Even if there are no actions, still show Home Course if available */}
+          {!(actions.length > 0) && (contact?.home_course || homeCourse) && (
+            <div className="cs-extra" role="note" aria-live="polite" style={{ marginTop: 10 }}>
+              <div className="row">
+                <label>Home Course</label>
+                <div className="value">{contact?.home_course || homeCourse}</div>
+              </div>
             </div>
           )}
         </>
