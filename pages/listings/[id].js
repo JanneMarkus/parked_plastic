@@ -9,6 +9,16 @@ import ContactSeller from "@/components/ContactSeller";
 import PlaceholderDisc from "@/components/PlaceholderDisc";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
 
+// Locale/timezone-stable formatter (prevents SSR/CSR drift)
+function formatDatePretty(input) {
+  try {
+    const d = input instanceof Date ? input : new Date(input);
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+    }).format(d);
+  } catch { return ""; }
+}
+
 export async function getServerSideProps(ctx) {
   const supabase = createSupabaseServerClient({ req: ctx.req, res: ctx.res });
   const id = ctx.params?.id;
@@ -325,7 +335,7 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
                 seller?.full_name || "Seller"
               )}
             </div>
-            <div className="muted">Posted {new Date(disc.created_at).toLocaleDateString()}</div>
+            <div className="muted">Posted {formatDatePretty(disc.created_at)}</div>
           </div>
 
           <div className="ctaRow">
