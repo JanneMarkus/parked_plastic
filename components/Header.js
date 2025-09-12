@@ -134,7 +134,7 @@ useEffect(() => {
       }).catch(() => {});
     } finally {
       setMenuOpen(false);
-      window.location.replace("/login");
+      window.location.replace("/");
     }
   }
 
