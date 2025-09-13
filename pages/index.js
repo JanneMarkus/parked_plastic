@@ -922,6 +922,8 @@ export default function Home() {
       </main>
 
       <style jsx>{`
+
+  .pp-wrap {padding-bottom: 80px;}
   .pageTitle {
     text-align: center;
     margin: 0 0 12px;
