@@ -150,6 +150,8 @@ export default function Home() {
   const router = useRouter();
   const [discs, setDiscs] = useState([]);
   const [loading, setLoading] = useState(false);
+  // Map of seller IDs to names for cards
+  const [sellerNames, setSellerNames] = useState({});
 
   // NEW: seller filter state (from ?seller)
   const [sellerName, setSellerName] = useState("");
@@ -237,13 +239,6 @@ export default function Home() {
 
   const debouncedSearch = useDebouncedValue(search, 450);
 
-  // Load seller from query on mount/change
-  useEffect(() => {
-    if (router.query?.seller) {
-      setSeller(router.query.seller);
-    }
-  }, [router.query?.seller]);
-
   // Fetch seller display name for tag
   useEffect(() => {
     let cancelled = false;
@@ -280,7 +275,7 @@ export default function Home() {
         let query = supabase
           .from("discs")
           .select(
-            "id,title,brand,mold,weight,condition,price,status,image_urls,created_at,speed,glide,turn,fade,is_inked,is_glow,plastic,description"
+            "id,title,brand,mold,weight,condition,price,status,image_urls,created_at,speed,glide,turn,fade,is_inked,is_glow,plastic,description, owner"
           )
           .order("created_at", { ascending: false });
 
@@ -429,6 +424,34 @@ export default function Home() {
     typeMidrange,
     typePutter,
   ]);
+
+  // Fetch seller display names for the cards, in a single batched query
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Collect unique owner IDs (ignore falsy)
+      const owners = Array.from(
+        new Set((discs || []).map((d) => d.owner).filter(Boolean))
+      );
+      if (owners.length === 0) {
+        if (!cancelled) setSellerNames({});
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", owners);
+        if (error) throw error;
+        if (!cancelled) {
+          setSellerNames(Object.fromEntries(data.map((p) => [p.id, p.full_name || "Seller"])));
+        }
+      } catch {
+        if (!cancelled) setSellerNames({});
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [discs]);
 
   // Prefetch blurDataURL
   useEffect(() => {
@@ -892,6 +915,18 @@ export default function Home() {
 
                 <div className="content">
                   <h2 className="cardTitle">{d.title}</h2>
+                  {/* Seller name (if available) */}
+                  {d.owner && sellerNames[d.owner] && (
+                    <div className="sellerLine">
+                      <Link
+                        href={`/?seller=${d.owner}`}
+                        title={`View ${sellerNames[d.owner]}'s listings`}
+                        onClick={(e) => e.stopPropagation()} // avoid triggering card link
+                      >
+                        {sellerNames[d.owner]}
+                      </Link>
+                    </div>
+                  )}
                   {/* Flight numbers compact line */}
                   {d.speed != null &&
                     d.glide != null &&
@@ -1087,6 +1122,28 @@ export default function Home() {
     margin-top: 2px;
     margin-bottom: auto;
   }
+
+  .sellerLine {
+    font-size: 0.85rem;
+    color: var(--char);
+    opacity: 0.85;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: -2px;
+  }
+
+  .sellerLine a {
+    color: inherit;
+    text-decoration: none;
+    font-weight: 600;
+  }
+    
+  .sellerLine a:hover {
+    text-decoration: underline;
+    color: var(--storm);
+  }
+
   .specs span:not(:last-child)::after {
     content: "•";
     margin-left: 8px;
