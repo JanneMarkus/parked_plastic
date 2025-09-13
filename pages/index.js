@@ -251,7 +251,7 @@ export default function Home() {
         setSellerName("");
         return;
       }
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("profiles")
         .select("full_name")
         .eq("id", seller)
@@ -396,7 +396,7 @@ export default function Home() {
           query = query.or(typeClauses.join(","));
         }
 
-        const { data, error } = await query; // will reject on abort
+        const { data, error } = await query;
 
         // Ignore if this response is stale or component unmounted
         if (cancelled || myRequestId !== requestIdRef.current) return;
@@ -452,7 +452,6 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Collect unique owner IDs (ignore falsy)
       const owners = Array.from(
         new Set((discs || []).map((d) => d.owner).filter(Boolean))
       );
@@ -461,15 +460,14 @@ export default function Home() {
         return;
       }
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("profiles")
           .select("id, full_name")
           .in("id", owners);
-        if (error) throw error;
         if (!cancelled) {
           setSellerNames(
             Object.fromEntries(
-              data.map((p) => [p.id, p.full_name || "Seller"])
+              (data || []).map((p) => [p.id, p.full_name || "Seller"])
             )
           );
         }
@@ -480,7 +478,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [discs]);
+  }, [discs, supabase]);
 
   // Prefetch blurDataURL
   useEffect(() => {
@@ -504,7 +502,6 @@ export default function Home() {
 
   const activeFiltersCount = useMemo(() => {
     const basics = [
-      // Count seller so Reset shows when ?seller=<id> is present
       seller.trim() ? "seller" : "",
       brand.trim(),
       mold.trim(),
@@ -518,7 +515,6 @@ export default function Home() {
       onlyGlow ? "onlyGlow" : "",
       excludeInked ? "excludeInked" : "",
       debouncedSearch.trim() ? "q" : "",
-      // NEW: types
       typeDriver || typeFairway || typeMidrange || typePutter ? "types" : "",
     ];
     const flight = [
@@ -584,15 +580,24 @@ export default function Home() {
     setTypeFairway(false);
     setTypeMidrange(false);
     setTypePutter(false);
-    // Strip ?seller from the URL (and keep other qs params intact)
     if (router.query && "seller" in router.query) {
       const { seller: _omit, ...rest } = router.query;
-      router.replace(
-        { pathname: router.pathname, query: rest },
-        undefined,
-        { shallow: true }
-      );
+      router.replace({ pathname: router.pathname, query: rest }, undefined, {
+        shallow: true,
+      });
     }
+  }
+
+  // ---- Helpers for card visuals ----
+  function conditionClass(cond) {
+    if (cond == null) return "";
+    const n = Number(cond);
+    if (!Number.isFinite(n)) return "";
+    if (n >= 10) return "cond--gold";
+    if (n >= 8) return "cond--green-rich";
+    if (n >= 6) return "cond--green";
+    if (n >= 4) return "cond--orange";
+    return "cond--red";
   }
 
   return (
@@ -730,7 +735,7 @@ export default function Home() {
                   />
                 </div>
 
-                {/* NEW: Disc Type chips */}
+                {/* Disc Type chips */}
                 <div className="pp-field">
                   <label>Disc Type</label>
                   <div className="chips">
@@ -795,7 +800,7 @@ export default function Home() {
                   unit=" g"
                 />
 
-                {/* ===== Flight number range sliders ===== */}
+                {/* Flight number range sliders */}
                 <DualRange
                   label="Speed"
                   min={1}
@@ -898,7 +903,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Cards — match Account page look & feel */}
+        {/* Cards */}
         <div className="grid-cards" aria-busy={loading ? "true" : "false"}>
           {discs.map((d, idx) => {
             const src = d.image_urls?.[0];
@@ -910,6 +915,7 @@ export default function Home() {
 
             const isSold = d.status === "sold";
             const isPending = d.status === "pending";
+            const condClass = conditionClass(d.condition);
 
             return (
               <Link
@@ -938,13 +944,30 @@ export default function Home() {
                   ) : (
                     <PlaceholderDisc className="img placeholder" />
                   )}
+
+                  {/* Over-image pills */}
+                  {price && (
+                    <span className="pp-pill pill--price" aria-label="Price">
+                      {price}
+                    </span>
+                  )}
+                  {d.condition != null && (
+                    <span
+                      className={`pp-pill pill--cond ${condClass}`}
+                      aria-label={`Condition ${d.condition}/10`}
+                    >
+                      {d.condition}/10
+                    </span>
+                  )}
+
                   {isSold && <div className="soldBanner">SOLD</div>}
                   {isPending && <div className="pendingBanner">PENDING</div>}
                 </div>
 
                 <div className="content">
                   <h2 className="cardTitle">{d.title}</h2>
-                  {/* Seller name (now a button to avoid nested <a>) */}
+
+                  {/* Seller name (button to avoid nested <a>) */}
                   {d.owner && sellerNames[d.owner] && (
                     <div className="sellerLine">
                       <button
@@ -954,10 +977,8 @@ export default function Home() {
                         aria-label={`View ${sellerNames[d.owner]}'s listings`}
                         onClick={(e) => {
                           e.preventDefault();
-                          e.stopPropagation(); // keep the outer card <Link> from firing
-                          // Optimistic local filter
+                          e.stopPropagation();
                           setSeller(d.owner);
-                          // Update URL shallowly
                           router.replace(
                             {
                               pathname: router.pathname,
@@ -972,6 +993,7 @@ export default function Home() {
                       </button>
                     </div>
                   )}
+
                   {/* Flight numbers compact line */}
                   {d.speed != null &&
                     d.glide != null &&
@@ -981,19 +1003,17 @@ export default function Home() {
                         {d.speed} / {d.glide} / {d.turn} / {d.fade}
                       </div>
                     )}
+
                   <div className="meta">
                     {d.brand || "—"}
                     {d.mold ? ` • ${d.mold}` : ""}
                   </div>
+
                   <div className="specs">
                     {d.weight && <span>{d.weight} g</span>}
                     {d.is_glow && <span>Glow</span>}
-                    {d.condition != null && <span>{d.condition}/10</span>}
                     {d.is_inked && <span>Inked</span>}
                   </div>
-                  {price && (
-                    <div className="price pp-badge pp-badge--teal">{price}</div>
-                  )}
                 </div>
               </Link>
             );
@@ -1001,274 +1021,178 @@ export default function Home() {
         </div>
       </main>
 
+      {/* Page-scoped styles that complement GlobalStyles (layout polish) */}
       <style jsx>{`
-  .pp-wrap {padding-bottom: 80px;}
-  .pageTitle {
-    text-align: center;
-    margin: 0 0 12px;
-    font-size: 1.6rem;
-    letter-spacing: 0.5px;
-  }
-  .sub {
-    text-align: center;
-    margin: 0 0 16px;
-  }
+        .pp-wrap {
+          padding-bottom: 80px;
+        }
+        .pageTitle {
+          text-align: center;
+          margin: 0 0 12px;
+          font-size: 1.6rem;
+          letter-spacing: 0.5px;
+        }
+        .sub {
+          text-align: center;
+          margin: 0 0 16px;
+        }
 
-  /* Filters container */
-  .filters {
-    background: #fff;
-    border: 1px solid var(--cloud);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-md);
-    padding: 12px;
-    margin-bottom: 16px;
-  }
-  .bar {
-    display: flex;
-    gap: 12px;
-    align-items: end;
-    flex-wrap: wrap;
-  }
+        /* Filters container */
+        .filters {
+          background: #fff;
+          border: 1px solid var(--cloud);
+          border-radius: var(--radius);
+          box-shadow: var(--shadow-md);
+          padding: 12px;
+          margin-bottom: 16px;
+        }
+        .bar {
+          display: flex;
+          gap: 12px;
+          align-items: end;
+          flex-wrap: wrap;
+        }
 
-  .bar .grow { flex: 1 1 280px; }
-  .bar-actions {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-left: auto;
-  }
+        .bar .grow {
+          flex: 1 1 280px;
+        }
+        .bar-actions {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          margin-left: auto;
+        }
 
-  .grid {
-    display: grid;
-    gap: 12px;
-    grid-template-columns: repeat(1, minmax(0, 1fr));
-    margin-top: 12px;
-  }
+        .grid {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: repeat(1, minmax(0, 1fr));
+          margin-top: 12px;
+        }
 
-  /* Two-input rows (sliders & ranges) */
-  .pp-field .row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 6px;
-  }
+        /* Two-input rows (sliders & ranges) */
+        .pp-field .row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          margin-top: 6px;
+        }
 
-  .checkbox { display: flex; gap: 8px; align-items: center; }
-  .toggles { display: flex; align-items: center; gap: 12px; }
+        .checkbox {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .toggles {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
 
-  .resultbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin: 10px 4px 16px;
-  }
+        .resultbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin: 10px 4px 16px;
+        }
 
-  /* Chips */
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-  .chip {
-    border: 1px solid var(--cloud);
-    background: #fff;
-    border-radius: 999px;
-    padding: 6px 10px;
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 13px;
-  }
-  .chip.is-active {
-    background: var(--tint, #ecf6f4);
-    border-color: var(--teal, #279989);
-    box-shadow: 0 0 0 2px rgba(39, 153, 137, 0.15) inset;
-  }
-  .hintRow { color: #666; font-size: 0.85rem; margin-top: 4px; }
+        /* Chips */
+        .chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 6px;
+        }
+        .chip {
+          border: 1px solid var(--cloud);
+          background: #fff;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 13px;
+        }
+        .chip.is-active {
+          background: var(--tint, #ecf6f4);
+          border-color: var(--teal, #279989);
+          box-shadow: 0 0 0 2px rgba(39, 153, 137, 0.15) inset;
+        }
+        .hintRow {
+          color: #666;
+          font-size: 0.85rem;
+          margin-top: 4px;
+        }
 
-  /* ===== Cards ===== */
-  .grid-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
-  }
-  .listing-card {
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    text-decoration: none;
-    transition: box-shadow 0.18s ease, transform 0.18s ease;
-  }
+        /* Autocomplete */
+        .pp-autocomplete {
+          position: relative;
+        }
+        .pp-suggest {
+          position: absolute;
+          z-index: 40;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          background: #fff;
+          border: 1px solid var(--cloud);
+          border-radius: 10px;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+          padding: 6px;
+          max-height: 280px;
+          overflow: auto;
+        }
+        .pp-suggest-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 10px;
+          border-radius: 8px;
+          cursor: pointer;
+          user-select: none;
+          font-size: 14px;
+        }
+        .pp-suggest-item:hover,
+        .pp-suggest-item.is-active {
+          background: #f7fbfa;
+        }
+        .pp-suggest .pill {
+          font-size: 11px;
+          border: 1px solid var(--cloud);
+          padding: 2px 6px;
+          border-radius: 999px;
+          color: var(--storm);
+          background: #fff;
+        }
 
-  .img-wrap {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    overflow: hidden;
-    background: var(--cloud);
-    border-radius: var(--radius) var(--radius) 0 0;
-  }
+        .img.placeholder {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }
 
-  /* Sold & pending visual treatments */
-  .listing-card.is-sold :global(.img),
-  .listing-card.is-pending :global(.img) {
-    filter: grayscale(1) brightness(0.92) contrast(1.05);
-    opacity: 0.95;
-  }
-  .listing-card.is-sold .img-wrap::after,
-  .listing-card.is-pending .img-wrap::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(transparent, rgba(20, 27, 77, 0.22));
-    pointer-events: none;
-  }
-  .soldBanner,
-  .pendingBanner {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    padding: 10px 18px;
-    border-radius: 14px;
-    font-family: var(--font-poppins, system-ui);
-    font-weight: 800;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: #fff;
-    background: rgba(20, 27, 77, 0.88);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 10px 24px rgba(20, 27, 77, 0.25);
-    pointer-events: none; /* don't block interactions */
-  }
-
-  .content {
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .cardTitle {
-    font-family: var(--font-poppins, system-ui);
-    font-weight: 600;
-    margin: 0;
-    font-size: 1.05rem;
-  }
-  .flightline {
-    margin-top: -2px;
-    font-family: var(--font-source, system-ui);
-    font-size: 14px;
-    color: var(--storm);
-    opacity: 0.85;
-  }
-  .meta { font-size: 0.9rem; opacity: 0.95; }
-  .specs {
-    font-size: 0.9rem;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 2px;
-    margin-bottom: auto;
-  }
-
-  .sellerLine {
-    font-size: 0.85rem;
-    color: var(--char);
-    opacity: 0.85;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: -2px;
-  }
-
-  /* Make the inner seller button look like the rest of your inline links */
-  .sellerLine .asLink {
-    background: none;
-    border: none;
-    padding: 0;
-    margin: 0;
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
-    text-decoration: none;
-    font-weight: 600;
-  }
-  .sellerLine .asLink:hover {
-    text-decoration: underline;
-    color: var(--storm);
-  }
-
-  .sellerLine a {
-    color: inherit;
-    text-decoration: none;
-    font-weight: 600;
-  }
-    
-  .sellerLine a:hover {
-    text-decoration: underline;
-    color: var(--storm);
-  }
-
-  .specs span:not(:last-child)::after {
-    content: "•";
-    margin-left: 8px;
-    color: var(--cloud);
-  }
-  .price { align-self: flex-start; }
-
-  /* Responsive layout */
-  @media (min-width: 480px) {
-    .pageTitle { font-size: 1.8rem; }
-    .filters { padding: 14px; }
-  }
-  @media (min-width: 768px) {
-    .pageTitle { font-size: 2rem; margin-bottom: 2px; }
-  }
-  @media (min-width: 1200px) {
-    .pageTitle { font-size: 2.2rem; }
-  }
-
-  /* Autocomplete */
-  .pp-autocomplete { position: relative; }
-  .pp-suggest {
-    position: absolute;
-    z-index: 40;
-    top: calc(100% + 6px);
-    left: 0;
-    right: 0;
-    background: #fff;
-    border: 1px solid var(--cloud);
-    border-radius: 10px;
-    box-shadow: 0 10px 24px rgba(0,0,0,0.08);
-    padding: 6px;
-    max-height: 280px;
-    overflow: auto;
-  }
-  .pp-suggest-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    user-select: none;
-    font-size: 14px;
-  }
-  .pp-suggest-item:hover,
-  .pp-suggest-item.is-active { background: #f7fbfa; }
-  .pp-suggest .pill {
-    font-size: 11px;
-    border: 1px solid var(--cloud);
-    padding: 2px 6px;
-    border-radius: 999px;
-    color: var(--storm);
-    background: #fff;
-  }
-
-  .img.placeholder {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-  }
-`}</style>
+        /* Responsive layout */
+        @media (min-width: 480px) {
+          .pageTitle {
+            font-size: 1.8rem;
+          }
+          .filters {
+            padding: 14px;
+          }
+        }
+        @media (min-width: 768px) {
+          .pageTitle {
+            font-size: 2rem;
+            margin-bottom: 2px;
+          }
+        }
+        @media (min-width: 1200px) {
+          .pageTitle {
+            font-size: 2.2rem;
+          }
+        }
+      `}</style>
     </>
   );
 }
