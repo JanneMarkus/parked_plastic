@@ -239,6 +239,10 @@ export default function Home() {
 
   const debouncedSearch = useDebouncedValue(search, 450);
 
+  // --- Strict-Mode safety helpers ---
+  // Guards against stale results when multiple fetches overlap
+  const requestIdRef = useRef(0);
+
   // Fetch seller display name for tag
   useEffect(() => {
     let cancelled = false;
@@ -267,8 +271,12 @@ export default function Home() {
     setSeller(typeof qsSeller === "string" ? qsSeller : "");
   }, [router.query?.seller]);
 
+  // Strict-Mode-safe data fetch effect
   useEffect(() => {
+    const myRequestId = ++requestIdRef.current;
     let cancelled = false;
+    const ctrl = new AbortController();
+
     (async () => {
       setLoading(true);
       try {
@@ -278,6 +286,11 @@ export default function Home() {
             "id,title,brand,mold,weight,condition,price,status,image_urls,created_at,speed,glide,turn,fade,is_inked,is_glow,plastic,description, owner"
           )
           .order("created_at", { ascending: false });
+
+        // Attach abort signal if the client supports it (supabase-js v2)
+        if (typeof query.abortSignal === "function") {
+          query = query.abortSignal(ctrl.signal);
+        }
 
         // Status filter: exclude pending unless toggled in
         if (!includePending) query = query.neq("status", "pending");
@@ -383,19 +396,29 @@ export default function Home() {
           query = query.or(typeClauses.join(","));
         }
 
-        const { data, error } = await query;
+        const { data, error } = await query; // will reject on abort
+
+        // Ignore if this response is stale or component unmounted
+        if (cancelled || myRequestId !== requestIdRef.current) return;
+
         if (error) throw error;
-        if (!cancelled) setDiscs(data || []);
+        setDiscs(data || []);
       } catch (e) {
+        if (cancelled || myRequestId !== requestIdRef.current) return;
         // eslint-disable-next-line no-console
         console.error(e);
-        if (!cancelled) setDiscs([]);
+        setDiscs([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (cancelled || myRequestId !== requestIdRef.current) return;
+        setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
+      try {
+        ctrl.abort();
+      } catch {}
     };
   }, [
     debouncedSearch,
@@ -444,13 +467,19 @@ export default function Home() {
           .in("id", owners);
         if (error) throw error;
         if (!cancelled) {
-          setSellerNames(Object.fromEntries(data.map((p) => [p.id, p.full_name || "Seller"])));
+          setSellerNames(
+            Object.fromEntries(
+              data.map((p) => [p.id, p.full_name || "Seller"])
+            )
+          );
         }
       } catch {
         if (!cancelled) setSellerNames({});
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [discs]);
 
   // Prefetch blurDataURL
@@ -606,7 +635,7 @@ export default function Home() {
               <div className="bar-actions">
                 {seller && sellerName && (
                   <span className="pp-badge pp-badge--teal">
-+                    Showing {sellerName}&apos;s listings
+                    Showing {sellerName}&apos;s listings
                   </span>
                 )}
                 {activeFiltersCount > 0 && (
@@ -915,16 +944,32 @@ export default function Home() {
 
                 <div className="content">
                   <h2 className="cardTitle">{d.title}</h2>
-                  {/* Seller name (if available) */}
+                  {/* Seller name (now a button to avoid nested <a>) */}
                   {d.owner && sellerNames[d.owner] && (
                     <div className="sellerLine">
-                      <Link
-                        href={`/?seller=${d.owner}`}
+                      <button
+                        type="button"
+                        className="asLink"
                         title={`View ${sellerNames[d.owner]}'s listings`}
-                        onClick={(e) => e.stopPropagation()} // avoid triggering card link
+                        aria-label={`View ${sellerNames[d.owner]}'s listings`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation(); // keep the outer card <Link> from firing
+                          // Optimistic local filter
+                          setSeller(d.owner);
+                          // Update URL shallowly
+                          router.replace(
+                            {
+                              pathname: router.pathname,
+                              query: { ...router.query, seller: d.owner },
+                            },
+                            undefined,
+                            { shallow: true }
+                          );
+                        }}
                       >
                         {sellerNames[d.owner]}
-                      </Link>
+                      </button>
                     </div>
                   )}
                   {/* Flight numbers compact line */}
@@ -957,7 +1002,6 @@ export default function Home() {
       </main>
 
       <style jsx>{`
-
   .pp-wrap {padding-bottom: 80px;}
   .pageTitle {
     text-align: center;
@@ -1133,6 +1177,23 @@ export default function Home() {
     margin-top: -2px;
   }
 
+  /* Make the inner seller button look like the rest of your inline links */
+  .sellerLine .asLink {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .sellerLine .asLink:hover {
+    text-decoration: underline;
+    color: var(--storm);
+  }
+
   .sellerLine a {
     color: inherit;
     text-decoration: none;
@@ -1208,7 +1269,6 @@ export default function Home() {
     height: 100%;
   }
 `}</style>
-
     </>
   );
 }
