@@ -1,60 +1,44 @@
-// pages/reset-password.js
-import { useEffect, useState } from "react";
+// /pages/reset-password.js
+import { useState } from "react";
 import Head from "next/head";
-import { useRouter } from "next/router";
+import { createSupabaseServerClient } from "@/utils/supabase/server";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 const supabase = getSupabaseBrowser();
 
-export default function ResetPassword() {
-  const router = useRouter();
-  const [checking, setChecking] = useState(true);
-  const [hasSession, setHasSession] = useState(false);
+export async function getServerSideProps(ctx) {
+  const server = createSupabaseServerClient({ req: ctx.req, res: ctx.res });
+  const { data } = await server.auth.getUser();
+  return { props: { hasSession: Boolean(data?.user) } };
+}
+
+export default function ResetPassword({ hasSession }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [infoMsg, setInfoMsg] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!active) return;
-        setHasSession(!!data?.session);
-      } finally {
-        if (active) setChecking(false);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
-
-  const onSubmit = async (e) => {
+  async function onSubmit(e) {
     e.preventDefault();
     setErrorMsg("");
     setInfoMsg("");
 
-    if (password.length < 6) {
-      setErrorMsg("Password must be at least 6 characters.");
-      return;
-    }
-    if (password !== confirm) {
-      setErrorMsg("Passwords do not match.");
-      return;
-    }
+    if (password.length < 6) return setErrorMsg("Password must be at least 6 characters.");
+    if (password !== confirm) return setErrorMsg("Passwords do not match.");
 
     setSubmitting(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+
       setInfoMsg("Password updated. Redirecting to sign in…");
-      setTimeout(() => router.replace("/login"), 900);
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+      window.location.assign("/login?reset=1");
     } catch (e) {
       setErrorMsg(e?.message || "Failed to update password.");
-    } finally {
       setSubmitting(false);
     }
-  };
+  }
 
   return (
     <main className="wrap">
@@ -69,8 +53,7 @@ export default function ResetPassword() {
         <h1 id="reset-title">Reset your password</h1>
 
         <div className="status" aria-live="polite" aria-atomic="true">
-          {checking && <div className="info">Checking your reset link…</div>}
-          {!checking && !hasSession && (
+          {!hasSession && (
             <div className="error">
               Your reset link is missing or expired. Go back to{" "}
               <a href="/login" className="alink">Sign in</a> and choose “Forgot your password?” to get a new link.
@@ -106,12 +89,7 @@ export default function ResetPassword() {
               onChange={(e) => setConfirm(e.target.value)}
             />
 
-            <button
-              className="btn btn-primary"
-              type="submit"
-              disabled={submitting}
-              aria-busy={submitting}
-            >
+            <button className="btn btn-primary" type="submit" disabled={submitting} aria-busy={submitting}>
               {submitting ? "Updating…" : "Update password"}
             </button>
           </form>
@@ -121,7 +99,7 @@ export default function ResetPassword() {
   );
 }
 
-/* ---- Styled-JSX: brand tokens + mobile-first ---- */
+/* ---- Styled-JSX: tokens (same as your original) ---- */
 const styles = `
   :root {
     --storm: #141B4D;
@@ -135,53 +113,22 @@ const styles = `
 
   .wrap { max-width: 520px; margin: 48px auto 90px; padding: 0 12px; background: var(--sea); }
 
-  .card {
-    background: #fff;
-    border: 1px solid var(--cloud);
-    border-radius: 14px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-    padding: 22px;
-  }
+  .card { background: #fff; border: 1px solid var(--cloud); border-radius: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 22px; }
 
-  h1 {
-    font-family: 'Poppins', sans-serif;
-    font-weight: 600;
-    letter-spacing: .5px;
-    color: var(--storm);
-    margin: 0 0 8px;
-    font-size: 1.6rem;
-  }
+  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; letter-spacing: .5px; color: var(--storm); margin: 0 0 8px; font-size: 1.6rem; }
 
   .status { min-height: 24px; margin-bottom: 10px; }
-  .info, .error {
-    border-radius: 10px; padding: 10px 12px; font-size: .95rem; margin: 8px 0 0;
-  }
+  .info, .error { border-radius: 10px; padding: 10px 12px; font-size: .95rem; margin: 8px 0 0; }
   .info { background: #f4fff9; border: 1px solid #d1f5e5; color: #1a6a58; }
   .error { background: #fff5f4; border: 1px solid #ffd9d5; color: #8c2f28; }
 
   .form { display: grid; gap: 10px; margin-top: 8px; }
 
   .label { font-weight: 600; color: var(--storm); }
-  .input {
-    width: 100%;
-    background: #fff;
-    border: 1px solid var(--cloud);
-    border-radius: 10px;
-    padding: 12px 14px;
-    font-size: 15px;
-  }
-  .input:focus {
-    outline: none;
-    border-color: var(--teal);
-    box-shadow: 0 0 0 4px var(--tint);
-  }
+  .input { width: 100%; background: #fff; border: 1px solid var(--cloud); border-radius: 10px; padding: 12px 14px; font-size: 15px; }
+  .input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 4px var(--tint); }
 
-  .btn {
-    width: 100%;
-    border: none; border-radius: 10px; padding: 12px 16px;
-    font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-    gap: 10px; font-size: 15px;
-  }
+  .btn { width: 100%; border: none; border-radius: 10px; padding: 12px 16px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-size: 15px; }
   .btn:focus { outline: none; box-shadow: 0 0 0 4px var(--tint); }
   .btn-primary { background: var(--teal); color: #fff; }
   .btn-primary:hover { background: var(--teal-dark); }

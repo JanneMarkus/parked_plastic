@@ -18,18 +18,27 @@ function parseCookies(header) {
 /** Create a profile if missing (best-effort; ignore RLS errors) */
 async function ensureProfileRow(supabase, userId, email) {
   try {
-    const { data } = await supabase
+    const { data: existing } = await supabase
       .from("profiles")
-      .select("id")
+      .select("id, full_name")
       .eq("id", userId)
       .maybeSingle();
-    if (data) return true;
 
-    // Insert a minimal row; ignore if RLS forbids (owner-trigger may exist in your project)
+    // Derive a default name from email local-part
+    const defaultName = email ? email.split("@")[0] : null;
+
+    if (existing) {
+      if (!existing.full_name && defaultName) {
+        await supabase.from("profiles").update({ full_name: defaultName }).eq("id", userId);
+      }
+      return true;
+    }
+
     await supabase
       .from("profiles")
-      .insert({ id: userId, full_name: null, public_email: email })
+      .insert({ id: userId, full_name: defaultName, public_email: email })
       .throwOnError();
+
     return true;
   } catch {
     return false;
@@ -46,15 +55,11 @@ async function ensureReferralCode(supabase, userId) {
       .maybeSingle();
     if (existing?.referral_code) return existing.referral_code;
 
-    // Try a few short codes; fall back to a longer one on repeated collisions
     const makeCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
 
     for (let i = 0; i < 5; i++) {
       const candidate = makeCode();
-      const { error } = await supabase
-        .from("profiles")
-        .update({ referral_code: candidate })
-        .eq("id", userId);
+      const { error } = await supabase.from("profiles").update({ referral_code: candidate }).eq("id", userId);
       if (!error) return candidate;
     }
 
@@ -87,8 +92,7 @@ export default async function handler(req, res) {
       (req.headers["x-forwarded-proto"] || "").split(",")[0] ||
       (req.headers.referer?.startsWith("https") ? "https" : "http");
     const host = req.headers["x-forwarded-host"] || req.headers.host || "";
-    const inferredOrigin =
-      host ? `${proto}://${host}` : process.env.NEXT_PUBLIC_SITE_URL || null;
+    const inferredOrigin = host ? `${proto}://${host}` : process.env.NEXT_PUBLIC_SITE_URL || null;
 
     const emailRedirectTo =
       typeof redirectTo === "string" && redirectTo
@@ -100,6 +104,24 @@ export default async function handler(req, res) {
     // IMPORTANT: use the server client wired with { req, res } so Supabase can set cookies
     const supabase = createSupabaseServerClient({ req, res });
 
+    // ---- PRECHECK (best-effort): does a profile already exist with this email?
+    // This helps produce a friendly "already registered" before we even call signUp.
+    try {
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("public_email", email)
+        .maybeSingle();
+
+      if (existingProfile) {
+        return res
+          .status(409)
+          .json({ error: "That email is already registered. Try signing in instead." });
+      }
+    } catch {
+      // ignore precheck errors; we'll still normalize signUp errors below
+    }
+
     // 1) Create auth user
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -108,17 +130,27 @@ export default async function handler(req, res) {
     });
 
     if (error) {
-      // Normalize a couple common cases for UX friendliness
-      const raw = String(error.message || "");
-      let msg = raw || "Sign-up failed";
-
-      if (/already registered/i.test(raw) || error.code === "user_already_registered") {
-        msg = "That email is already registered.";
-      } else if (/email not confirmed/i.test(raw) || error.code === "email_not_confirmed") {
-        msg = "Please confirm your email before signing in.";
+      // Normalize common “already exists” variants
+      const raw = `${error.code || ""} ${error.message || ""}`;
+      if (
+        /user_already_registered/i.test(raw) ||
+        /already registered/i.test(raw) ||
+        /already exists/i.test(raw) ||
+        /duplicate key/i.test(raw) ||
+        /23505/.test(raw) // PG unique_violation
+      ) {
+        return res
+          .status(409)
+          .json({ error: "That email is already registered. Try signing in instead." });
       }
 
-      return res.status(400).json({ error: msg });
+      // Email confirmation required
+      if (/email not confirmed/i.test(raw) || error.code === "email_not_confirmed") {
+        return res.status(400).json({ error: "Please confirm your email before signing in." });
+      }
+
+      // Fallback
+      return res.status(400).json({ error: error.message || "Sign-up failed" });
     }
 
     const session = data?.session ?? null;
@@ -171,8 +203,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // If confirmations are ON, session will be null and Supabase emailed the user.
-    // If confirmations are OFF, session may be present and httpOnly cookies are already set.
     return res.status(200).json({
       ok: true,
       user: user ? { id: user.id, email: user.email ?? null } : null,
@@ -180,8 +210,7 @@ export default async function handler(req, res) {
       access_token: session?.access_token ?? null,
       refresh_token: session?.refresh_token ?? null,
       expires_at: session?.expires_at ?? null, // unix seconds
-      // Convenience flag for the UI: true when we did NOT receive a session (confirmations enabled)
-      emailConfirmationLikelySent: !session,
+      emailConfirmationLikelySent: !session, // true when we did NOT receive a session (confirmations enabled)
     });
   } catch {
     return res.status(500).json({ error: "Sign-up failed" });

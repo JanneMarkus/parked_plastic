@@ -2,11 +2,15 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
+import {
+  getSupabaseBrowser,
+  getSupabaseBrowserImplicit,
+} from "@/lib/supabaseBrowser";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
 
 /* --------------------------- Shared small helpers -------------------------- */
 const supabase = getSupabaseBrowser();
+const supabaseImplicit = getSupabaseBrowserImplicit();
 
 function sanitizeRedirectPath(raw) {
   if (typeof raw !== "string") return "/";
@@ -226,20 +230,28 @@ export default function Login({ initialRedirect = "/" }) {
 
         // Otherwise, confirmation is required: stay on page and inform the user.
         setInfoMsg(
-          "Check your inbox to confirm your account. After verification, come back here to sign in."
+          "Check your inbox to confirm your account. After verification, you'll be redirected to a sign-in page."
         );
         setMode("signin");
         return;
       }
 
       if (mode === "forgot") {
+        // inside onSubmit => if (mode === "forgot")
+        const origin =
+          typeof window !== "undefined" && window.location?.origin
+            ? window.location.origin
+            : process.env.NEXT_PUBLIC_SITE_URL;
+
         const { error } = await supabase.auth.resetPasswordForEmail(
           cleanEmail,
           {
+            // This becomes {{ .RedirectTo }} in the email template above
             redirectTo: origin != null ? `${origin}/reset-password` : undefined,
           }
         );
         if (error) throw error;
+
         setInfoMsg(
           "If that email exists, a password reset link has been sent."
         );
@@ -254,11 +266,6 @@ export default function Login({ initialRedirect = "/" }) {
       if (/Email not confirmed/i.test(raw)) {
         msg = "Please confirm your email before signing in.";
         setCanResendConfirm(true);
-      }
-      if (/already registered/i.test(raw)) {
-        msg =
-          "That email is already registered. Try signing in or reset your password.";
-        setMode("signin");
       }
       // If we hit token/cookie corruption, give the nuclear option
       if (/token|jwt|refresh|expired|auth/i.test(raw)) {

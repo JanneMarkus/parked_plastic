@@ -29,6 +29,32 @@ export default async function handler(req, res) {
     const session = data?.session ?? null;
     const user = data?.user ?? null;
 
+    // ---- PATCH: set default full_name if null ----
+    if (user?.id) {
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profile && !profile.full_name) {
+          const defaultName = (user.email || email || "")
+            .split("@")[0]
+            .slice(0, 50); // keep it safe length-wise
+          if (defaultName) {
+            await supabase
+              .from("profiles")
+              .update({ full_name: defaultName })
+              .eq("id", user.id);
+          }
+        }
+      } catch (err) {
+        // non-fatal; don't block sign-in
+        console.error("Failed to patch full_name:", err);
+      }
+    }
+
     // ---- DEBUG (dev only): what cookies are actually on this response? ----
     const setCookieHeader = res.getHeader("Set-Cookie");
     const cookieLines = Array.isArray(setCookieHeader)
@@ -38,7 +64,6 @@ export default async function handler(req, res) {
       : [];
 
     if (process.env.NODE_ENV !== "production") {
-      // Also surface names only, for quick visual confirm
       res.setHeader("X-Debug-Set-Cookie-Count", String(cookieLines.length));
     }
 
@@ -49,11 +74,12 @@ export default async function handler(req, res) {
       access_token: session?.access_token ?? null,
       refresh_token: session?.refresh_token ?? null,
       expires_at: session?.expires_at ?? null,
-      // DEBUG echo to help us troubleshoot (dev only)
       ...(process.env.NODE_ENV !== "production"
         ? {
             debugSetCookie: cookieLines,
-            debugCookieNames: cookieLines.map((c) => String(c).split(";")[0].split("=")[0]),
+            debugCookieNames: cookieLines.map((c) =>
+              String(c).split(";")[0].split("=")[0]
+            ),
           }
         : {}),
     });
