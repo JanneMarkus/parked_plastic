@@ -238,7 +238,7 @@ export default function GlobalStyles() {
       }
       .listing-card:hover {
         text-decoration: none;
-        transform: translateY(-2px);
+        transform: None;
         box-shadow: var(--shadow-lg);
         border-color: #d9dee6;
       }
