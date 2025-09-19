@@ -14,9 +14,24 @@ function formatDatePretty(input) {
   try {
     const d = input instanceof Date ? input : new Date(input);
     return new Intl.DateTimeFormat("en-US", {
-      month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
     }).format(d);
-  } catch { return ""; }
+  } catch {
+    return "";
+  }
+}
+
+function conditionClass(cond) {
+  const n = Number(cond);
+  if (!Number.isFinite(n)) return "";
+  if (n >= 10) return "cond--gold";
+  if (n >= 8) return "cond--green-rich";
+  if (n >= 6) return "cond--green";
+  if (n >= 4) return "cond--orange";
+  return "cond--red";
 }
 
 export async function getServerSideProps(ctx) {
@@ -59,7 +74,11 @@ export async function getServerSideProps(ctx) {
   };
 }
 
-export default function ListingDetail({ initialUser, initialDisc, initialSeller }) {
+export default function ListingDetail({
+  initialUser,
+  initialDisc,
+  initialSeller,
+}) {
   const router = useRouter();
   const toast = useToast();
   const { id } = router.query;
@@ -81,9 +100,13 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
     return "";
   }, [id, router.asPath]);
 
-  const editUrl = useMemo(() => (id ? `/listings/${id}/edit` : "/account"), [id]);
+  const editUrl = useMemo(
+    () => (id ? `/listings/${id}/edit` : "/account"),
+    [id]
+  );
   const isOwner = useMemo(
-    () => Boolean(initialUser?.id && disc?.owner && initialUser.id === disc.owner),
+    () =>
+      Boolean(initialUser?.id && disc?.owner && initialUser.id === disc.owner),
     [initialUser?.id, disc?.owner]
   );
 
@@ -92,13 +115,18 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
     const n = Number(disc.price);
     if (!Number.isFinite(n)) return "Contact";
     try {
-      return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(n);
+      return new Intl.NumberFormat("en-CA", {
+        style: "currency",
+        currency: "CAD",
+      }).format(n);
     } catch {
       return `$${n.toFixed(2)}`;
     }
   }, [disc?.price]);
 
-  const imgs = Array.isArray(disc?.image_urls) ? disc.image_urls.filter(Boolean) : [];
+  const imgs = Array.isArray(disc?.image_urls)
+    ? disc.image_urls.filter(Boolean)
+    : [];
   const mainImg = imgs[mainIdx] || null;
   const flightLine =
     disc &&
@@ -172,21 +200,54 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
           </div>
         </div>
         <style jsx>{`
-          .wrap { max-width: 1100px; margin: 32px auto 80px; padding: 0 16px; }
-          .errorCard { background: #fff; border: 1px solid #e9e9e9; border-radius: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding: 22px; text-align: center; }
-          .errorMsg { color: #8c2f28; margin: 0 0 10px; }
-          .btn { border: 2px solid #141b4d; color: #141b4d; padding: 10px 14px; border-radius: 8px; font-weight: 700; text-decoration: none; }
-          .btn:hover { background: #141b4d; color: #fff; }
-          .btn-outline { background: #fff; }
+          .wrap {
+            max-width: 1100px;
+            margin: 32px auto 80px;
+            padding: 0 16px;
+          }
+          .errorCard {
+            background: #fff;
+            border: 1px solid #e9e9e9;
+            border-radius: 14px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            padding: 22px;
+            text-align: center;
+          }
+          .errorMsg {
+            color: #8c2f28;
+            margin: 0 0 10px;
+          }
+          .btn {
+            border: 2px solid #141b4d;
+            color: #141b4d;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-weight: 700;
+            text-decoration: none;
+          }
+          .btn:hover {
+            background: #141b4d;
+            color: #fff;
+          }
+          .btn-outline {
+            background: #fff;
+          }
         `}</style>
       </main>
     );
   }
 
-  const metaTitle = disc.title ? `${disc.title} — Parked Plastic` : "Listing — Parked Plastic";
+  const metaTitle = disc.title
+    ? `${disc.title} — Parked Plastic`
+    : "Listing — Parked Plastic";
   const metaDesc = (() => {
-    const parts = [disc.brand, disc.mold, disc.weight != null ? `${disc.weight}g` : null, disc.condition, disc.city]
-      .filter(Boolean);
+    const parts = [
+      disc.brand,
+      disc.mold,
+      disc.weight != null ? `${disc.weight}g` : null,
+      disc.condition,
+      disc.city,
+    ].filter(Boolean);
     const prefix = parts.length ? `${parts.join(" • ")} — ` : "";
     return (disc.description || "").trim() || `${prefix}Disc listing.`;
   })();
@@ -221,7 +282,9 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
 
       <section className="top">
         {/* Gallery */}
-        <div className={`gallery ${isSold ? "sold" : isPending ? "pending" : ""}`}>
+        <div
+          className={`gallery ${isSold ? "sold" : isPending ? "pending" : ""}`}
+        >
           <div className="hero">
             {mainImg ? (
               <Image
@@ -236,8 +299,16 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
             ) : (
               <PlaceholderDisc className="hero placeholder" />
             )}
-            {isSold && <div className="soldBanner" aria-label="Sold">SOLD</div>}
-            {isPending && <div className="pendingBanner" aria-label="Pending">SALE PENDING</div>}
+            {isSold && (
+              <div className="soldBanner" aria-label="Sold">
+                SOLD
+              </div>
+            )}
+            {isPending && (
+              <div className="pendingBanner" aria-label="Pending">
+                SALE PENDING
+              </div>
+            )}
           </div>
 
           {imgs.length > 1 && (
@@ -271,7 +342,15 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
 
           <div className="priceRow">
             <span className="priceText">{priceText}</span>
-            {disc.condition && <span className="condition">{disc.condition}</span>}
+            {disc.condition && (
+              <span
+                className={`condition ${conditionClass(disc.condition)}`}
+                aria-label={`Condition ${disc.condition}/10`}
+                title={`Condition ${disc.condition}/10`}
+              >
+                {disc.condition}/10
+              </span>
+            )}
           </div>
 
           <div className="specs">
@@ -314,13 +393,21 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
             <div className="spec">
               <label>Glow Disc?</label>
               <div>
-                {disc.is_glow == true ? "Yes" : disc.is_glow == false ? "No" : "Not Specified"}
+                {disc.is_glow == true
+                  ? "Yes"
+                  : disc.is_glow == false
+                  ? "No"
+                  : "Not Specified"}
               </div>
             </div>
             <div className="spec">
               <label>Inked?</label>
               <div>
-                {disc.is_inked == true ? "Yes" : disc.is_inked == false ? "No" : "Not Specified"}
+                {disc.is_inked == true
+                  ? "Yes"
+                  : disc.is_inked == false
+                  ? "No"
+                  : "Not Specified"}
               </div>
             </div>
           </div>
@@ -328,14 +415,19 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
           <div className="seller">
             <div className="sellername">
               {seller?.id ? (
-                <Link href={`/?seller=${seller.id}`} title="View this seller's listings">
+                <Link
+                  href={`/?seller=${seller.id}`}
+                  title="View this seller's listings"
+                >
                   {seller.full_name || "Seller"}
                 </Link>
               ) : (
                 seller?.full_name || "Seller"
               )}
             </div>
-            <div className="muted">Posted {formatDatePretty(disc.created_at)}</div>
+            <div className="muted">
+              Posted {formatDatePretty(disc.created_at)}
+            </div>
           </div>
 
           <div className="ctaRow">
@@ -354,13 +446,19 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
                       if (!el) return;
                       e.preventDefault();
                       // Center it and always draw attention
-                      el.scrollIntoView({ behavior: "smooth", block: "center" });
+                      el.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
                       // Restart highlight animation
                       el.classList.remove("is-highlight");
                       void el.offsetWidth; // reflow to restart animation
                       el.classList.add("is-highlight");
                       // Clean up the class after the animation ends
-                      setTimeout(() => el.classList.remove("is-highlight"), 1200);
+                      setTimeout(
+                        () => el.classList.remove("is-highlight"),
+                        1200
+                      );
                     }}
                   >
                     {isPending ? "Contact seller (pending)" : "Contact seller"}
@@ -373,7 +471,11 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
                 <Link className="btn btn-secondary" href="/">
                   Back to listings
                 </Link>
-                <button type="button" className="btn btn-coral" onClick={() => setReportOpen(true)}>
+                <button
+                  type="button"
+                  className="btn btn-coral"
+                  onClick={() => setReportOpen(true)}
+                >
                   Report listing
                 </button>
               </>
@@ -414,7 +516,11 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
           <div className="modalCard">
             <div className="modalHead">
               <h3 id="report-title">Report listing</h3>
-              <button className="x" onClick={() => setReportOpen(false)} aria-label="Close report form">
+              <button
+                className="x"
+                onClick={() => setReportOpen(false)}
+                aria-label="Close report form"
+              >
                 ×
               </button>
             </div>
@@ -422,7 +528,11 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
             <form onSubmit={submitReport} className="modalBody">
               <div className="field">
                 <label htmlFor="reason">Reason</label>
-                <select id="reason" value={reportReason} onChange={(e) => setReportReason(e.target.value)}>
+                <select
+                  id="reason"
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                >
                   <option>Spam / scam</option>
                   <option>Inappropriate content</option>
                   <option>Incorrect / misleading</option>
@@ -458,16 +568,31 @@ export default function ListingDetail({ initialUser, initialDisc, initialSeller 
               </div>
 
               <div className="actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setReportOpen(false)} disabled={reportSending}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setReportOpen(false)}
+                  disabled={reportSending}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={reportSending}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={reportSending}
+                >
                   {reportSending ? "Sending…" : "Send report"}
                 </button>
               </div>
 
               {reportStatus && (
-                <p className={`status ${/Thanks/.test(reportStatus) ? "ok" : "err"}`}>{reportStatus}</p>
+                <p
+                  className={`status ${
+                    /Thanks/.test(reportStatus) ? "ok" : "err"
+                  }`}
+                >
+                  {reportStatus}
+                </p>
               )}
             </form>
           </div>
@@ -563,7 +688,22 @@ const styles = `
 
   .priceRow { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
   .priceText { font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--storm); font-size: 1.2rem; }
-  .condition { display:inline-block; background: var(--wave); color: var(--storm); border-radius: 8px; padding: 6px 10px; font-weight: 600; }
+  .condition {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: .95rem;
+  letter-spacing: .2px;
+  color: #fff; /* overridden by .cond--gold’s deep-gold text */
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+}
+
+/* Ensure gold pill uses the deep-gold text */
+.condition.cond--gold {
+  color: #7A5C00;
+  text-shadow: none;
+}
 
   .specs { display:grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 16px 0 8px; }
   .spec { background: var(--sea); border:1px solid var(--cloud); border-radius: 10px; padding: 10px 12px; }
