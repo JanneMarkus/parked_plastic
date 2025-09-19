@@ -1,5 +1,5 @@
 // pages/account.js
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
@@ -71,7 +71,6 @@ function StatusTabs({ value, counts, onChange }) {
         );
       })}
       <style jsx>{`
-
         .pp-tabs {
           display: flex;
           gap: 8px;
@@ -365,8 +364,6 @@ function ListingCard({ l, onToggleStatus, onDelete }) {
           width: 100%;
           height: 100%;
         }
-
-        
       `}</style>
     </article>
   );
@@ -379,6 +376,32 @@ export default function Account({ user }) {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [errorMsg, setErrorMsg] = useState("");
+
+  // NEW: referral stats state + fetch on mount
+  const [refStats, setRefStats] = useState({
+    code: null,
+    inviteUrl: null,
+    visits: 0,
+    signups: 0,
+  });
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/referral-stats", {
+          credentials: "include",
+        });
+        const json = await res.json();
+        if (active) setRefStats(json || {});
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function redirectToLogin() {
     const redirect =
@@ -501,6 +524,82 @@ export default function Account({ user }) {
           <ContactInfoCard userId={user.id} />
         </div>
 
+        <div className="refCard" role="region" aria-label="Referral">
+          <div className="refRow">
+            <div className="refInfo">
+              <div className="refTitle">Invite friends, earn entries</div>
+              <div className="refSub">
+                Share your personal link. When they sign up and post, you both
+                get credit.
+              </div>
+              <div className="refStats">
+                <span className="pill">{refStats.visits ?? 0} visits</span>
+                <span className="pill">{refStats.signups ?? 0} signups</span>
+              </div>
+            </div>
+
+            <div className="refActions">
+              <div className="refLink">
+                <input
+                  type="text"
+                  readOnly
+                  value={refStats.inviteUrl || ""}
+                  placeholder="Your invite link will appear here"
+                  aria-label="Invite link"
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  type="button"
+                  className="refBtn"
+                  onClick={async () => {
+                    if (!refStats.inviteUrl) return;
+                    try {
+                      await navigator.clipboard?.writeText(refStats.inviteUrl);
+                      alert("Invite link copied!");
+                    } catch {
+                      window.prompt(
+                        "Copy your invite link:",
+                        refStats.inviteUrl
+                      );
+                    }
+                  }}
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  className="refBtn"
+                  onClick={async () => {
+                    const url = refStats.inviteUrl || "/";
+                    const text =
+                      "Got discs to sell? Post them on Parked Plastic.";
+                    try {
+                      if (navigator.share) {
+                        await navigator.share({
+                          title: "Parked Plastic",
+                          text,
+                          url,
+                        });
+                      } else {
+                        await navigator.clipboard?.writeText(url);
+                        alert("Invite link copied!");
+                      }
+                    } catch {}
+                  }}
+                >
+                  Share
+                </button>
+              </div>
+              {!refStats.code && (
+                <div className="hint">
+                  Sign up or refresh after signup to generate your referral
+                  link.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="toolbar">
           <StatusTabs
             value={statusFilter}
@@ -610,7 +709,106 @@ export default function Account({ user }) {
         }
 
         .pp-wrap {
-        padding-bottom: 48px;}
+          padding-bottom: 48px;
+        }
+        .refCard {
+          background: #fff;
+          border: 1px solid var(--cloud);
+          border-radius: 12px;
+          box-shadow: var(--shadow-md);
+          padding: 14px;
+          margin: 8px 0 14px;
+        }
+        .refRow {
+          display: grid;
+          gap: 12px;
+        }
+        .refTitle {
+          font-weight: 700;
+          color: var(--storm);
+        }
+        .refSub {
+          color: var(--char);
+          margin-top: 2px;
+        }
+        .refStats {
+          display: flex;
+          gap: 8px;
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
+        .pill {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 8px;
+          border: 1px solid var(--cloud);
+          border-radius: 999px;
+          font-size: 13px;
+          color: var(--storm);
+          background: #fff;
+        }
+        .refActions {
+          display: grid;
+          gap: 8px;
+        }
+
+        /* Input-group style container */
+        .refLink {
+          display: flex;
+          align-items: stretch;
+          gap: 0;
+          border: 1px solid var(--cloud);
+          border-radius: 10px;
+          overflow: hidden;
+          background: #fff;
+        }
+        .refLink input {
+          flex: 1;
+          border: none;
+          padding: 10px 12px;
+          font-size: 14px;
+          color: var(--char);
+          background: #fff;
+        }
+        .refLink input:focus {
+          outline: none;
+        }
+
+        /* OPTION 2: local button class so globals don't override */
+        .refBtn {
+          border: none;
+          border-left: 1px solid var(--cloud);
+          padding: 0 14px;
+          font-weight: 600;
+          font-size: 14px;
+          background: var(--storm);
+          color: #fff;
+          cursor: pointer;
+          transition: box-shadow 0.15s ease, opacity 0.15s ease;
+          display: inline-flex;
+          align-items: center;
+        }
+        .refBtn:hover {
+          /* keep color; add subtle hover without going white */
+          box-shadow: inset 0 0 0 9999px rgba(255, 255, 255, 0.06);
+          opacity: 0.98;
+        }
+        .refBtn:focus-visible {
+          outline: 2px solid var(--teal);
+          box-shadow: 0 0 0 4px var(--tint);
+        }
+
+        .hint {
+          color: #666;
+          font-size: 0.9rem;
+        }
+
+        @media (min-width: 680px) {
+          .refRow {
+            grid-template-columns: 1fr 1fr;
+            align-items: center;
+          }
+        }
       `}</style>
     </>
   );

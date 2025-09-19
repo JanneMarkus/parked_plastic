@@ -1,6 +1,75 @@
 // /pages/api/auth/signup.js
 import { createSupabaseServerClient } from "@/utils/supabase/server";
 
+/** Minimal cookie parser (avoids adding a dep) */
+function parseCookies(header) {
+  const out = {};
+  if (!header) return out;
+  String(header)
+    .split(";")
+    .map((v) => v.trim())
+    .forEach((pair) => {
+      const idx = pair.indexOf("=");
+      if (idx > -1) out[pair.slice(0, idx)] = decodeURIComponent(pair.slice(idx + 1));
+    });
+  return out;
+}
+
+/** Create a profile if missing (best-effort; ignore RLS errors) */
+async function ensureProfileRow(supabase, userId, email) {
+  try {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (data) return true;
+
+    // Insert a minimal row; ignore if RLS forbids (owner-trigger may exist in your project)
+    await supabase
+      .from("profiles")
+      .insert({ id: userId, full_name: null, public_email: email })
+      .throwOnError();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Generate a short unique referral code and store it if absent */
+async function ensureReferralCode(supabase, userId) {
+  try {
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("referral_code")
+      .eq("id", userId)
+      .maybeSingle();
+    if (existing?.referral_code) return existing.referral_code;
+
+    // Try a few short codes; fall back to a longer one on repeated collisions
+    const makeCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+
+    for (let i = 0; i < 5; i++) {
+      const candidate = makeCode();
+      const { error } = await supabase
+        .from("profiles")
+        .update({ referral_code: candidate })
+        .eq("id", userId);
+      if (!error) return candidate;
+    }
+
+    const fallback = (Math.random().toString(36) + Math.random().toString(36))
+      .replace(/[^a-z0-9]/gi, "")
+      .slice(0, 10)
+      .toUpperCase();
+
+    await supabase.from("profiles").update({ referral_code: fallback }).eq("id", userId);
+    return fallback;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
@@ -31,6 +100,7 @@ export default async function handler(req, res) {
     // IMPORTANT: use the server client wired with { req, res } so Supabase can set cookies
     const supabase = createSupabaseServerClient({ req, res });
 
+    // 1) Create auth user
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -54,9 +124,55 @@ export default async function handler(req, res) {
     const session = data?.session ?? null;
     const user = data?.user ?? null;
 
-    // If confirmations are ON, session will be null and Supabase will have emailed the user.
-    // If confirmations are OFF, session may be present and httpOnly cookies are already set.
+    // 2) Referral plumbing (best-effort; won't block signup)
+    if (user?.id) {
+      // Ensure profile row exists (or skip if RLS blocks)
+      await ensureProfileRow(supabase, user.id, user.email ?? email);
 
+      // Ensure the new user has a referral_code
+      await ensureReferralCode(supabase, user.id);
+
+      // If a referral cookie is present, attribute once
+      try {
+        const cookies = parseCookies(req.headers.cookie || "");
+        const refCode = cookies.ref || null;
+
+        if (refCode) {
+          // Resolve inviter
+          const { data: inviter } = await supabase
+            .from("profiles")
+            .select("id, referral_code")
+            .eq("referral_code", refCode)
+            .maybeSingle();
+
+          if (inviter && inviter.id !== user.id) {
+            // Only set if not already set
+            await supabase
+              .from("profiles")
+              .update({ referred_by: inviter.id })
+              .eq("id", user.id)
+              .is("referred_by", null);
+
+            // Optional audit/event row (if the table exists)
+            try {
+              await supabase.from("referral_events").insert({
+                ref_code: refCode,
+                inviter_id: inviter.id,
+                invitee_id: user.id,
+                event_type: "signup",
+              });
+            } catch {
+              // ignore if table doesn't exist
+            }
+          }
+        }
+      } catch {
+        // non-fatal
+      }
+    }
+
+    // If confirmations are ON, session will be null and Supabase emailed the user.
+    // If confirmations are OFF, session may be present and httpOnly cookies are already set.
     return res.status(200).json({
       ok: true,
       user: user ? { id: user.id, email: user.email ?? null } : null,

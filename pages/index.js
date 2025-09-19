@@ -243,6 +243,38 @@ export default function Home() {
   // Guards against stale results when multiple fetches overlap
   const requestIdRef = useRef(0);
 
+  async function onInviteFriend() {
+    const base =
+      typeof window !== "undefined" && window.location?.origin
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_SITE_URL || "";
+
+    let url = base || "/";
+
+    try {
+      const res = await fetch("/api/referral-code", { credentials: "include" });
+      const { code } = await res.json();
+      if (code) url = `${base}/r/${code}`;
+    } catch {
+      // swallow; we'll share the homepage
+    }
+
+    const text = "Got discs to sell? Post them on Parked Plastic.";
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Parked Plastic", text, url });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        alert("Invite link copied to clipboard!");
+      } else {
+        // very old browsers
+        window.prompt("Copy your invite link:", url);
+      }
+    } catch {
+      // user canceled share — no-op
+    }
+  }
+
   // Fetch seller display name for tag
   useEffect(() => {
     let cancelled = false;
@@ -1019,6 +1051,24 @@ export default function Home() {
             );
           })}
         </div>
+        {/* End-of-list CTAs */}
+        <section className="endCta" aria-label="End of listings">
+          <p className="endText">
+            That’s all for now — help grow the marketplace!
+          </p>
+          <div className="endActions">
+            <Link href="/create-listing" className="pp-btn">
+              Post a Disc
+            </Link>
+            <button
+              type="button"
+              className="pp-btn pp-btn--secondary"
+              onClick={onInviteFriend}
+            >
+              Invite a Friend
+            </button>
+          </div>
+        </section>
       </main>
 
       {/* Page-scoped styles that complement GlobalStyles (layout polish) */}
@@ -1191,6 +1241,26 @@ export default function Home() {
           .pageTitle {
             font-size: 2.2rem;
           }
+        }
+
+        .endCta {
+          margin: 20px 0 0;
+          padding: 16px;
+
+          border-radius: var(--radius);
+          background: var(--sea);
+          text-align: center;
+        }
+        .endText {
+          margin: 0 0 10px;
+          color: var(--storm);
+          font-weight: 700;
+        }
+        .endActions {
+          display: flex;
+          gap: 10px;
+          justify-content: center;
+          flex-wrap: wrap;
         }
       `}</style>
     </>
