@@ -23,17 +23,31 @@ export default function ResetPassword({ hasSession }) {
     setErrorMsg("");
     setInfoMsg("");
 
-    if (password.length < 6) return setErrorMsg("Password must be at least 6 characters.");
+    if (password.length < 6)
+      return setErrorMsg("Password must be at least 6 characters.");
     if (password !== confirm) return setErrorMsg("Passwords do not match.");
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      // pages/reset-password.js (inside onSubmit)
+
+      const resp = await fetch("/api/auth/update-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password }),
+      });
+      if (!resp.ok) {
+        const j = await resp.json().catch(() => ({}));
+        throw new Error(j?.error || "Failed to update password.");
+      }
 
       setInfoMsg("Password updated. Redirecting to sign in…");
       await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-      await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
+      await fetch("/api/auth/clear", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => {});
       window.location.assign("/login?reset=1");
     } catch (e) {
       setErrorMsg(e?.message || "Failed to update password.");
@@ -57,7 +71,10 @@ export default function ResetPassword({ hasSession }) {
           {!hasSession && (
             <div className="error">
               Your reset link is missing or expired. Go back to{" "}
-              <a href="/login" className="alink">Sign in</a> and choose “Forgot your password?” to get a new link.
+              <a href="/login" className="alink">
+                Sign in
+              </a>{" "}
+              and choose “Forgot your password?” to get a new link.
             </div>
           )}
           {errorMsg && <div className="error">{errorMsg}</div>}
@@ -66,7 +83,9 @@ export default function ResetPassword({ hasSession }) {
 
         {hasSession && (
           <form onSubmit={onSubmit} className="form">
-            <label className="label" htmlFor="password">New password</label>
+            <label className="label" htmlFor="password">
+              New password
+            </label>
             <input
               id="password"
               type="password"
@@ -78,7 +97,9 @@ export default function ResetPassword({ hasSession }) {
               onChange={(e) => setPassword(e.target.value)}
             />
 
-            <label className="label" htmlFor="confirm">Confirm password</label>
+            <label className="label" htmlFor="confirm">
+              Confirm password
+            </label>
             <input
               id="confirm"
               type="password"
@@ -90,7 +111,12 @@ export default function ResetPassword({ hasSession }) {
               onChange={(e) => setConfirm(e.target.value)}
             />
 
-            <button className="btn btn-primary" type="submit" disabled={submitting} aria-busy={submitting}>
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={submitting}
+              aria-busy={submitting}
+            >
               {submitting ? "Updating…" : "Update password"}
             </button>
           </form>
