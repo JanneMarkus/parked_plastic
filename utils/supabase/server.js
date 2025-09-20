@@ -5,24 +5,35 @@ import { serialize, parse } from "cookie";
 export function createSupabaseServerClient({ req, res }) {
   const isProd = process.env.NODE_ENV === "production";
 
-  // If you want a domain cookie in prod, set it here (optional):
-  // const host = req?.headers?.host || "";
-  // const rootDomain =
-  //   host.endsWith(".yourdomain.com") || host === "yourdomain.com"
-  //     ? ".yourdomain.com"
-  //     : undefined;
-
+  const xfHost = (req?.headers?.["x-forwarded-host"] || "")
+    .split(",")[0]
+    ?.trim();
+  const rawHost = xfHost || req?.headers?.host || "";
+  const host = rawHost.split(":")[0]; // strip port if present
+  const rootDomain =
+    host.endsWith(".parkedplastic.com") || host === "parkedplastic.com"
+      ? ".parkedplastic.com"
+      : undefined;
+  const FALLBACK_DOMAIN = process.env.AUTH_COOKIE_DOMAIN; // e.g. ".parkedplastic.com"
   const baseDefaults = {
     path: "/",
     sameSite: "lax",
-    // We will force httpOnly & secure below so they can’t be overridden
-    // ...(isProd && rootDomain ? { domain: rootDomain } : {}),
+    ...(isProd && (rootDomain || FALLBACK_DOMAIN)
+      ? { domain: rootDomain || FALLBACK_DOMAIN }
+      : {}),
   };
 
   function appendSetCookie(nextCookie) {
     const prev = res.getHeader("Set-Cookie");
     const list = Array.isArray(prev) ? prev : prev ? [prev] : [];
     res.setHeader("Set-Cookie", Array.from(new Set([...list, nextCookie])));
+  }
+
+  if (!res.getHeader("Cache-Control"))
+    res.setHeader("Cache-Control", "no-store");
+  const vary = String(res.getHeader("Vary") || "");
+  if (!/\bCookie\b/i.test(vary)) {
+    res.setHeader("Vary", vary ? `${vary}, Cookie` : "Cookie");
   }
 
   return createServerClient(
@@ -43,8 +54,8 @@ export function createSupabaseServerClient({ req, res }) {
           const cookie = serialize(name, value, {
             ...options,
             ...baseDefaults,
-            httpOnly: true,                 // force HttpOnly
-            secure: isProd,                 // force Secure on HTTPS
+            httpOnly: true, // force HttpOnly
+            secure: isProd, // force Secure on HTTPS
           });
           appendSetCookie(cookie);
         },
@@ -52,8 +63,8 @@ export function createSupabaseServerClient({ req, res }) {
           const cookie = serialize(name, "", {
             ...options,
             ...baseDefaults,
-            httpOnly: true,                 // force HttpOnly
-            secure: isProd,                 // force Secure on HTTPS
+            httpOnly: true, // force HttpOnly
+            secure: isProd, // force Secure on HTTPS
             maxAge: 0,
             expires: new Date(0),
           });

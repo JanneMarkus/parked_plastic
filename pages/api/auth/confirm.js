@@ -3,10 +3,14 @@ import { createSupabaseServerClient } from "@/utils/supabase/server";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).end();
+  if (!res.getHeader("Cache-Control")) res.setHeader("Cache-Control", "no-store");
+  const vary = String(res.getHeader("Vary") || "");
+  if (!/\bCookie\b/i.test(vary)) res.setHeader("Vary", vary ? `${vary}, Cookie` : "Cookie");
 
   const token_hash = typeof req.query.token_hash === "string" ? req.query.token_hash : "";
   const type = typeof req.query.type === "string" ? req.query.type : "";
-  const next = typeof req.query.next === "string" && req.query.next ? req.query.next : "/";
+  const rawNext = typeof req.query.next === "string" ? req.query.next : "/";
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
 
   if (!token_hash || !type) {
     return res.redirect(302, `/login?error=${encodeURIComponent("Missing token")}`);

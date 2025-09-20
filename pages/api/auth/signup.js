@@ -10,7 +10,8 @@ function parseCookies(header) {
     .map((v) => v.trim())
     .forEach((pair) => {
       const idx = pair.indexOf("=");
-      if (idx > -1) out[pair.slice(0, idx)] = decodeURIComponent(pair.slice(idx + 1));
+      if (idx > -1)
+        out[pair.slice(0, idx)] = decodeURIComponent(pair.slice(idx + 1));
     });
   return out;
 }
@@ -29,7 +30,10 @@ async function ensureProfileRow(supabase, userId, email) {
 
     if (existing) {
       if (!existing.full_name && defaultName) {
-        await supabase.from("profiles").update({ full_name: defaultName }).eq("id", userId);
+        await supabase
+          .from("profiles")
+          .update({ full_name: defaultName })
+          .eq("id", userId);
       }
       return true;
     }
@@ -59,7 +63,10 @@ async function ensureReferralCode(supabase, userId) {
 
     for (let i = 0; i < 5; i++) {
       const candidate = makeCode();
-      const { error } = await supabase.from("profiles").update({ referral_code: candidate }).eq("id", userId);
+      const { error } = await supabase
+        .from("profiles")
+        .update({ referral_code: candidate })
+        .eq("id", userId);
       if (!error) return candidate;
     }
 
@@ -68,7 +75,10 @@ async function ensureReferralCode(supabase, userId) {
       .slice(0, 10)
       .toUpperCase();
 
-    await supabase.from("profiles").update({ referral_code: fallback }).eq("id", userId);
+    await supabase
+      .from("profiles")
+      .update({ referral_code: fallback })
+      .eq("id", userId);
     return fallback;
   } catch {
     return null;
@@ -92,7 +102,9 @@ export default async function handler(req, res) {
       (req.headers["x-forwarded-proto"] || "").split(",")[0] ||
       (req.headers.referer?.startsWith("https") ? "https" : "http");
     const host = req.headers["x-forwarded-host"] || req.headers.host || "";
-    const inferredOrigin = host ? `${proto}://${host}` : process.env.NEXT_PUBLIC_SITE_URL || null;
+    const inferredOrigin = host
+      ? `${proto}://${host}`
+      : process.env.NEXT_PUBLIC_SITE_URL || null;
 
     const emailRedirectTo =
       typeof redirectTo === "string" && redirectTo
@@ -114,9 +126,9 @@ export default async function handler(req, res) {
         .maybeSingle();
 
       if (existingProfile) {
-        return res
-          .status(409)
-          .json({ error: "That email is already registered. Try signing in instead." });
+        return res.status(409).json({
+          error: "That email is already registered. Try signing in instead.",
+        });
       }
     } catch {
       // ignore precheck errors; we'll still normalize signUp errors below
@@ -126,7 +138,11 @@ export default async function handler(req, res) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo },
+      options: {
+        emailRedirectTo: inferredOrigin
+          ? `${inferredOrigin}/api/auth/confirm?type=signup&next=/login`
+          : undefined,
+      },
     });
 
     if (error) {
@@ -139,14 +155,19 @@ export default async function handler(req, res) {
         /duplicate key/i.test(raw) ||
         /23505/.test(raw) // PG unique_violation
       ) {
-        return res
-          .status(409)
-          .json({ error: "That email is already registered. Try signing in instead." });
+        return res.status(409).json({
+          error: "That email is already registered. Try signing in instead.",
+        });
       }
 
       // Email confirmation required
-      if (/email not confirmed/i.test(raw) || error.code === "email_not_confirmed") {
-        return res.status(400).json({ error: "Please confirm your email before signing in." });
+      if (
+        /email not confirmed/i.test(raw) ||
+        error.code === "email_not_confirmed"
+      ) {
+        return res
+          .status(400)
+          .json({ error: "Please confirm your email before signing in." });
       }
 
       // Fallback

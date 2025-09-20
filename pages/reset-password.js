@@ -33,6 +33,7 @@ export default function ResetPassword({ hasSession }) {
 
       setInfoMsg("Password updated. Redirecting to sign in…");
       await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+      await fetch("/api/auth/clear", { method: "POST", credentials: "include" }).catch(() => {});
       window.location.assign("/login?reset=1");
     } catch (e) {
       setErrorMsg(e?.message || "Failed to update password.");

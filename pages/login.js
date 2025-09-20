@@ -2,15 +2,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import {
-  getSupabaseBrowser,
-  getSupabaseBrowserImplicit,
-} from "@/lib/supabaseBrowser";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
 
 /* --------------------------- Shared small helpers -------------------------- */
 const supabase = getSupabaseBrowser();
-const supabaseImplicit = getSupabaseBrowserImplicit();
 
 function sanitizeRedirectPath(raw) {
   if (typeof raw !== "string") return "/";
@@ -143,12 +139,7 @@ export default function Login({ initialRedirect = "/" }) {
         type: "signup",
         email: clean,
         options: {
-          emailRedirectTo:
-            typeof window !== "undefined" && window.location?.origin
-              ? `${window.location.origin}/login?redirect=${encodeURIComponent(
-                  nextPath
-                )}`
-              : undefined,
+          emailRedirectTo: `${window.location.origin}/api/auth/confirm?type=signup&next=${encodeURIComponent(`/login?redirect=${encodeURIComponent(nextPath)}`)}`,
         },
       });
       if (error) throw error;
@@ -205,15 +196,7 @@ export default function Login({ initialRedirect = "/" }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({
-            email: cleanEmail,
-            password: cleanPassword,
-            // So magic link returns to login with intended redirect
-            redirectTo:
-              origin != null
-                ? `${origin}/login?redirect=${encodeURIComponent(nextPath)}`
-                : undefined,
-          }),
+          body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
         });
 
         const json = await res.json();
@@ -246,8 +229,10 @@ export default function Login({ initialRedirect = "/" }) {
         const { error } = await supabase.auth.resetPasswordForEmail(
           cleanEmail,
           {
-            // This becomes {{ .RedirectTo }} in the email template above
-            redirectTo: origin != null ? `${origin}/reset-password` : undefined,
+            redirectTo:
+              origin != null
+                ? `${origin}/api/auth/confirm?type=recovery&next=/reset-password`
+                : undefined,
           }
         );
         if (error) throw error;
