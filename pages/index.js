@@ -516,21 +516,24 @@ export default function Home() {
     let obs;
     const setup = () => {
       const isSmall = window.matchMedia("(max-width: 640px)").matches;
-      const VISIBLE_RATIO = isSmall ? 0.20 : 0.20;   // looser on small screens
-      const HEADER_OFFSET_PX = isSmall ? 120 : 120;  // match your header heights
+      const HEADER_OFFSET_PX = 120; // match header height
+      const VISIBLE_VH = isSmall ? 0.55 : 0.45; // portion of viewport the results must occupy
 
       obs?.disconnect();
       obs = new IntersectionObserver(
         ([entry]) => {
+          // How much of the viewport is covered by the results, regardless of the results' total height
+          const visiblePortionOfViewport =
+            entry.intersectionRect.height / window.innerHeight;
           const sufficientlyVisible =
-            entry.isIntersecting && entry.intersectionRatio >= VISIBLE_RATIO;
+            entry.isIntersecting && visiblePortionOfViewport >= VISIBLE_VH;
           setShowJump(!sufficientlyVisible);
         },
         {
           root: null,
           // Push the “viewport” down by the header to judge top visibility correctly
           rootMargin: `-${HEADER_OFFSET_PX}px 0px 0px 0px`,
-          threshold: [0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1],
+          threshold: [0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1],
         }
       );
       obs.observe(el);
@@ -1419,9 +1422,6 @@ export default function Home() {
           opacity: 1;
           transform: translateY(0);
           pointer-events: auto;
-        }
-          transition: transform 120ms ease, box-shadow 120ms ease,
-            background 120ms ease;
         }
         .pp-fab::before {
           content: "";
