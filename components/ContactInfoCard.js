@@ -183,7 +183,7 @@ export default function ContactInfoCard({ userId }) {
             </div>
 
             <div className="pp-field">
-              <label htmlFor="phone">Phone (with country code)</label>
+              <label htmlFor="phone">Phone</label>
               <input
                 id="phone"
                 type="tel"

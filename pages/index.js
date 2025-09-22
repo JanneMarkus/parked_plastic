@@ -625,11 +625,9 @@ export default function Home() {
     if (cond == null) return "";
     const n = Number(cond);
     if (!Number.isFinite(n)) return "";
-    if (n >= 10) return "cond--gold";
-    if (n >= 8) return "cond--green-rich";
-    if (n >= 6) return "cond--green";
-    if (n >= 4) return "cond--orange";
-    return "cond--red";
+    if (n >= 7) return "cond--good"; // 8–10 = Green
+    if (n >= 5) return "cond--warn"; // 5–7  = Yellow
+    return "cond--bad"; // ≤4   = Red
   }
 
   return (
@@ -773,19 +771,11 @@ export default function Home() {
                   <div className="chips">
                     <button
                       type="button"
-                      className={`chip ${typeDriver ? "is-active" : ""}`}
-                      onClick={() => setTypeDriver((v) => !v)}
-                      aria-pressed={typeDriver ? "true" : "false"}
+                      className={`chip ${typePutter ? "is-active" : ""}`}
+                      onClick={() => setTypePutter((v) => !v)}
+                      aria-pressed={typePutter ? "true" : "false"}
                     >
-                      Driver
-                    </button>
-                    <button
-                      type="button"
-                      className={`chip ${typeFairway ? "is-active" : ""}`}
-                      onClick={() => setTypeFairway((v) => !v)}
-                      aria-pressed={typeFairway ? "true" : "false"}
-                    >
-                      Fairway
+                      Putter
                     </button>
                     <button
                       type="button"
@@ -797,11 +787,19 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      className={`chip ${typePutter ? "is-active" : ""}`}
-                      onClick={() => setTypePutter((v) => !v)}
-                      aria-pressed={typePutter ? "true" : "false"}
+                      className={`chip ${typeFairway ? "is-active" : ""}`}
+                      onClick={() => setTypeFairway((v) => !v)}
+                      aria-pressed={typeFairway ? "true" : "false"}
                     >
-                      Putter
+                      Fairway
+                    </button>
+                    <button
+                      type="button"
+                      className={`chip ${typeDriver ? "is-active" : ""}`}
+                      onClick={() => setTypeDriver((v) => !v)}
+                      aria-pressed={typeDriver ? "true" : "false"}
+                    >
+                      Driver
                     </button>
                   </div>
                   <p className="hintRow">
@@ -809,17 +807,6 @@ export default function Home() {
                     10–15
                   </p>
                 </div>
-
-                {/* Sleepy Scale (Condition) */}
-                <DualRange
-                  label="Condition (Sleepy Scale)"
-                  min={1}
-                  max={10}
-                  step={1}
-                  minState={[minCondition, setMinCondition]}
-                  maxState={[maxCondition, setMaxCondition]}
-                  unit="/10"
-                />
 
                 {/* Weight (g) */}
                 <DualRange
@@ -866,6 +853,16 @@ export default function Home() {
                   maxState={[fadeMax, setFadeMax]}
                 />
 
+                {/* Sleepy Scale (Condition) */}
+                <DualRange
+                  label="Condition (Sleepy Scale)"
+                  min={1}
+                  max={10}
+                  step={1}
+                  minState={[minCondition, setMinCondition]}
+                  maxState={[maxCondition, setMaxCondition]}
+                  unit="/10"
+                />
                 <div className="pp-field">
                   <label>Price (CAD)</label>
                   <div className="row">
@@ -1261,6 +1258,33 @@ export default function Home() {
           gap: 10px;
           justify-content: center;
           flex-wrap: wrap;
+        }
+
+        /* Condition pill base */
+        .pill--cond {
+          font-weight: 700;
+          border: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        /* 8–10 (Green) */
+        .pill--cond.cond--good {
+          background: #2e7d32; /* accessible green */
+          color: #fff;
+          border-color: rgba(0, 0, 0, 0.12);
+        }
+
+        /* 5–7 (Yellow) */
+        .pill--cond.cond--warn {
+          background: #f6c445; /* warm yellow/amber */
+          color: #3a3a3a; /* dark text for contrast */
+          border-color: rgba(0, 0, 0, 0.12);
+        }
+
+        /* ≤4 (Red) */
+        .pill--cond.cond--bad {
+          background: #d64545; /* accessible red */
+          color: #fff;
+          border-color: rgba(0, 0, 0, 0.12);
         }
       `}</style>
     </>

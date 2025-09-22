@@ -1,4 +1,3 @@
-// pages/account.js
 import React, { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
@@ -33,15 +32,13 @@ const CAD = new Intl.NumberFormat("en-CA", {
   currency: "CAD",
 });
 
-// Match index.tsx mapping exactly
+// Match index mapping (3-color): Green 7–10, Yellow 5–6, Red ≤4
 function conditionClass(cond) {
   const n = Number(cond);
   if (!Number.isFinite(n)) return "";
-  if (n >= 10) return "cond--gold";
-  if (n >= 8) return "cond--green-rich";
-  if (n >= 6) return "cond--green";
-  if (n >= 4) return "cond--orange";
-  return "cond--red";
+  if (n >= 7) return "cond--good";   // Green
+  if (n >= 5) return "cond--warn";   // Yellow
+  return "cond--bad";                // Red
 }
 
 function StatusTabs({ value, counts, onChange }) {
@@ -364,6 +361,15 @@ function ListingCard({ l, onToggleStatus, onDelete }) {
           width: 100%;
           height: 100%;
         }
+
+        /* 3-color condition pill (scoped here for account cards) */
+        .pill--cond {
+          font-weight: 700;
+          border: 1px solid rgba(0,0,0,0.08);
+        }
+        .pill--cond.cond--good { background: #2e7d32; color: #fff; }   /* 7–10 */
+        .pill--cond.cond--warn { background: #f6c445; color: #3A3A3A; }/* 5–6  */
+        .pill--cond.cond--bad  { background: #d64545; color: #fff; }   /* ≤4   */
       `}</style>
     </article>
   );
@@ -608,7 +614,7 @@ export default function Account({ user }) {
           />
         </div>
 
-        <div aria-live="polite" aria-atomic="true" className="statusRegion">
+        <div className="statusRegion" aria-live="polite" aria-atomic="true">
           {errorMsg && <div className="alert error">{errorMsg}</div>}
           {loading && <div className="alert info">Loading your listings…</div>}
         </div>
@@ -676,7 +682,7 @@ export default function Account({ user }) {
         .grid {
           display: grid;
           gap: 16px;
-          grid-template-columns: repeat(3, 1fr); /* 3 across on large screens */
+          grid-template-columns: repeat(3, 1fr);
         }
 
         .empty {
@@ -698,19 +704,13 @@ export default function Account({ user }) {
 
         /* Match index’s responsive drop */
         @media (max-width: 1100px) {
-          .grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
+          .grid { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 640px) {
-          .grid {
-            grid-template-columns: 1fr;
-          }
+          .grid { grid-template-columns: 1fr; }
         }
 
-        .pp-wrap {
-          padding-bottom: 48px;
-        }
+        .pp-wrap { padding-bottom: 48px; }
         .refCard {
           background: #fff;
           border: 1px solid var(--cloud);
@@ -719,24 +719,10 @@ export default function Account({ user }) {
           padding: 14px;
           margin: 8px 0 14px;
         }
-        .refRow {
-          display: grid;
-          gap: 12px;
-        }
-        .refTitle {
-          font-weight: 700;
-          color: var(--storm);
-        }
-        .refSub {
-          color: var(--char);
-          margin-top: 2px;
-        }
-        .refStats {
-          display: flex;
-          gap: 8px;
-          margin-top: 8px;
-          flex-wrap: wrap;
-        }
+        .refRow { display: grid; gap: 12px; }
+        .refTitle { font-weight: 700; color: var(--storm); }
+        .refSub { color: var(--char); margin-top: 2px; }
+        .refStats { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
         .pill {
           display: inline-flex;
           align-items: center;
@@ -747,12 +733,8 @@ export default function Account({ user }) {
           color: var(--storm);
           background: #fff;
         }
-        .refActions {
-          display: grid;
-          gap: 8px;
-        }
+        .refActions { display: grid; gap: 8px; }
 
-        /* Input-group style container */
         .refLink {
           display: flex;
           align-items: stretch;
@@ -770,11 +752,8 @@ export default function Account({ user }) {
           color: var(--char);
           background: #fff;
         }
-        .refLink input:focus {
-          outline: none;
-        }
+        .refLink input:focus { outline: none; }
 
-        /* OPTION 2: local button class so globals don't override */
         .refBtn {
           border: none;
           border-left: 1px solid var(--cloud);
@@ -789,7 +768,6 @@ export default function Account({ user }) {
           align-items: center;
         }
         .refBtn:hover {
-          /* keep color; add subtle hover without going white */
           box-shadow: inset 0 0 0 9999px rgba(255, 255, 255, 0.06);
           opacity: 0.98;
         }
@@ -798,10 +776,7 @@ export default function Account({ user }) {
           box-shadow: 0 0 0 4px var(--tint);
         }
 
-        .hint {
-          color: #666;
-          font-size: 0.9rem;
-        }
+        .hint { color: #666; font-size: 0.9rem; }
 
         @media (min-width: 680px) {
           .refRow {

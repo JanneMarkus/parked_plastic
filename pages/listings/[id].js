@@ -1,4 +1,3 @@
-// pages/listings/[id].js
 import { useMemo, useState } from "react";
 import { useToast } from "@/components/ToastProvider";
 import Head from "next/head";
@@ -24,14 +23,13 @@ function formatDatePretty(input) {
   }
 }
 
+// 3-color map: Green 7–10, Yellow 5–6, Red ≤4
 function conditionClass(cond) {
   const n = Number(cond);
   if (!Number.isFinite(n)) return "";
-  if (n >= 10) return "cond--gold";
-  if (n >= 8) return "cond--green-rich";
-  if (n >= 6) return "cond--green";
-  if (n >= 4) return "cond--orange";
-  return "cond--red";
+  if (n >= 7) return "cond--good";   // Green
+  if (n >= 5) return "cond--warn";   // Yellow
+  return "cond--bad";                // Red
 }
 
 export async function getServerSideProps(ctx) {
@@ -679,7 +677,7 @@ const styles = `
     backdrop-filter: blur(2px); z-index: 2;
   }
   .soldBanner { color: #fff; background: rgba(20,27,77,0.9); }
-  .pendingBanner { color: #fff; background: rgba(20,27,77,0.9);; border-color: rgba(0,0,0,0.06); box-shadow: 0 12px 28px rgba(232,176,46,0.35); }
+  .pendingBanner { color: #fff; background: rgba(20,27,77,0.9); border-color: rgba(0,0,0,0.06); box-shadow: 0 12px 28px rgba(232,176,46,0.35); }
 
   /* Panel / details */
   .panel { background:#fff; border:1px solid var(--cloud); border-radius:12px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
@@ -688,22 +686,22 @@ const styles = `
 
   .priceRow { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
   .priceText { font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--storm); font-size: 1.2rem; }
-  .condition {
-  display: inline-block;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: .95rem;
-  letter-spacing: .2px;
-  color: #fff; /* overridden by .cond--gold’s deep-gold text */
-  box-shadow: 0 2px 10px rgba(0,0,0,.06);
-}
 
-/* Ensure gold pill uses the deep-gold text */
-.condition.cond--gold {
-  color: #7A5C00;
-  text-shadow: none;
-}
+  /* Condition pill (3-color) */
+  .condition {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: .95rem;
+    letter-spacing: .2px;
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+  .condition.cond--good { background: #2e7d32; color: #fff; }   /* 7–10 */
+  .condition.cond--warn { background: #f6c445; color: #3A3A3A; }/* 5–6  */
+  .condition.cond--bad  { background: #d64545; color: #fff; }   /* ≤4   */
 
   .specs { display:grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 16px 0 8px; }
   .spec { background: var(--sea); border:1px solid var(--cloud); border-radius: 10px; padding: 10px 12px; }
@@ -721,23 +719,12 @@ const styles = `
   .desc p { margin: 0; color: var(--char); }
 
   .chatwrap { background:#fff; border:1px solid var(--cloud); border-radius:12px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-top: 24px; }
-/* Attention pulse when user clicks "Contact seller" */
-  .chatwrap.is-highlight {
-    animation: contactGlow 1.2s ease-out;
-  }
+  /* Attention pulse when user clicks "Contact seller" */
+  .chatwrap.is-highlight { animation: contactGlow 1.2s ease-out; }
   @keyframes contactGlow {
-    0% {
-      box-shadow: 0 0 0 0 rgba(39,153,137,0.00), 0 0 0 0 rgba(39,153,137,0.00);
-      outline: 0 solid rgba(39,153,137,0.00);
-    }
-    18% {
-      outline: 3px solid var(--teal);
-      box-shadow: 0 0 0 6px rgba(39,153,137,0.25);
-    }
-    100% {
-      outline: 0 solid transparent;
-      box-shadow: 0 0 0 0 rgba(39,153,137,0);
-    }
+    0%   { box-shadow: 0 0 0 0 rgba(39,153,137,0.00), 0 0 0 0 rgba(39,153,137,0.00); outline: 0 solid rgba(39,153,137,0.00); }
+    18%  { outline: 3px solid var(--teal); box-shadow: 0 0 0 6px rgba(39,153,137,0.25); }
+    100% { outline: 0 solid transparent; box-shadow: 0 0 0 0 rgba(39,153,137,0); }
   }
   @media (prefers-reduced-motion: reduce) {
     .chatwrap.is-highlight { animation: none; outline: 3px solid var(--teal); }
