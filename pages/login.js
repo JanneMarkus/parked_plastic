@@ -1,4 +1,4 @@
-// pages/login.js
+// /pages/login.js
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
@@ -70,12 +70,16 @@ export default function Login({ initialRedirect = "/" }) {
   const [resending, setResending] = useState(false);
   const [canResendConfirm, setCanResendConfirm] = useState(false);
 
+  // Derived state for password length helper
+  const passLen = String(password || "").trim().length;
+  const passwordTooShort = mode === "signup" && passLen > 0 && passLen < 6;
+
   // Escape hatch for stale/broken sessions
   async function hardResetSession(redirectPath = null) {
     try {
       // clear client state + local storage
       await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-      // clear httpOnly cookies (server-side) if you added the API route
+      // clear httpOnly cookies (server-side)
       await fetch("/api/auth/clear", {
         method: "POST",
         credentials: "include",
@@ -139,7 +143,9 @@ export default function Login({ initialRedirect = "/" }) {
         type: "signup",
         email: clean,
         options: {
-          emailRedirectTo: `${window.location.origin}/api/auth/confirm?type=signup&next=${encodeURIComponent(`/login?redirect=${encodeURIComponent(nextPath)}`)}`,
+          emailRedirectTo: `${window.location.origin}/api/auth/confirm?type=signup&next=${encodeURIComponent(
+            `/login?redirect=${encodeURIComponent(nextPath)}`
+          )}`,
         },
       });
       if (error) throw error;
@@ -184,9 +190,8 @@ export default function Login({ initialRedirect = "/" }) {
         const j = await res.json();
         if (!res.ok) throw new Error(j?.error || "Sign-in failed");
 
-        // Hard navigation so the new httpOnly cookies are applied from first paint
         if (typeof window !== "undefined") {
-          window.location.assign(nextPath); // or window.location.replace(nextPath)
+          window.location.assign(nextPath);
         }
         return;
       }
@@ -202,16 +207,13 @@ export default function Login({ initialRedirect = "/" }) {
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || "Sign-up failed");
 
-        // If your Supabase project auto-signs in after signup (no email confirmation),
-        // the handler will return a session. In that case, hard navigate.
         if (json.hasSession) {
           if (typeof window !== "undefined") {
-            window.location.assign(nextPath); // or replace()
+            window.location.assign(nextPath);
           }
-          return; // stop here
+          return;
         }
 
-        // Otherwise, confirmation is required: stay on page and inform the user.
         setInfoMsg(
           "Check your inbox to confirm your account. After verification, you'll be redirected to a sign-in page."
         );
@@ -220,8 +222,7 @@ export default function Login({ initialRedirect = "/" }) {
       }
 
       if (mode === "forgot") {
-        // inside onSubmit => if (mode === "forgot")
-        const origin =
+        const origin2 =
           typeof window !== "undefined" && window.location?.origin
             ? window.location.origin
             : process.env.NEXT_PUBLIC_SITE_URL;
@@ -230,8 +231,8 @@ export default function Login({ initialRedirect = "/" }) {
           cleanEmail,
           {
             redirectTo:
-              origin != null
-                ? `${origin}/api/auth/confirm?type=recovery&next=/reset-password`
+              origin2 != null
+                ? `${origin2}/api/auth/confirm?type=recovery&next=/reset-password`
                 : undefined,
           }
         );
@@ -251,6 +252,9 @@ export default function Login({ initialRedirect = "/" }) {
       if (/Email not confirmed/i.test(raw)) {
         msg = "Please confirm your email before signing in.";
         setCanResendConfirm(true);
+      }
+      if (/Password must be at least 6 characters/i.test(raw)) {
+        msg = "Password must be at least 6 characters long.";
       }
       // If we hit token/cookie corruption, give the nuclear option
       if (/token|jwt|refresh|expired|auth/i.test(raw)) {
@@ -354,7 +358,7 @@ export default function Login({ initialRedirect = "/" }) {
           </>
         ) : (
           <>
-            <form onSubmit={onSubmit} className="form">
+            <form onSubmit={onSubmit} className="form" noValidate>
               <label className="label" htmlFor="email">
                 Email
               </label>
@@ -385,7 +389,22 @@ export default function Login({ initialRedirect = "/" }) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     minLength={6}
+                    aria-invalid={passwordTooShort ? "true" : "false"}
+                    aria-describedby={
+                      mode === "signup" ? "password-requirements" : undefined
+                    }
                   />
+                  {mode === "signup" && (
+                    <div
+                      id="password-requirements"
+                      className={passwordTooShort ? "hint errorish" : "hint"}
+                      style={{ marginTop: 2 }}
+                    >
+                      {passwordTooShort
+                        ? "Password must be at least 6 characters long."
+                        : "Minimum 6 characters."}
+                    </div>
+                  )}
                 </>
               )}
 
@@ -525,7 +544,6 @@ const styles = `
 
   .troubleRow { margin-top: 8px; text-align: center; }
 
-  /* Prevent 100%-width inputs from spilling past the card */
   .form { display: grid; gap: 10px; margin-top: 8px; min-width: 0; }
   .input, .btn {
     box-sizing: border-box;
@@ -586,6 +604,7 @@ const styles = `
   }
 
   .hint { font-size: 12px; color: #555; }
+  .hint.errorish { color: #8c2f28; } /* subtle red when too short */
 
   @media (min-width: 768px) {
     h1 { font-size: 1.8rem; }

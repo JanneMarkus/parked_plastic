@@ -97,6 +97,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing credentials" });
     }
 
+    // UX-friendly, explicit length guard (server-side)
+    if (String(password).trim().length < 6) {
+      return res
+        .status(400)
+        .json({ error: "Password must be at least 6 characters long." });
+    }
+
     // Derive a safe default origin if redirectTo isn't provided
     const proto =
       (req.headers["x-forwarded-proto"] || "").split(",")[0] ||
@@ -117,7 +124,6 @@ export default async function handler(req, res) {
     const supabase = createSupabaseServerClient({ req, res });
 
     // ---- PRECHECK (best-effort): does a profile already exist with this email?
-    // This helps produce a friendly "already registered" before we even call signUp.
     try {
       const { data: existingProfile } = await supabase
         .from("profiles")
@@ -131,7 +137,7 @@ export default async function handler(req, res) {
         });
       }
     } catch {
-      // ignore precheck errors; we'll still normalize signUp errors below
+      // ignore precheck errors
     }
 
     // 1) Create auth user
@@ -139,9 +145,9 @@ export default async function handler(req, res) {
       email,
       password,
       options: {
-        emailRedirectTo: inferredOrigin
-          ? `${inferredOrigin}/api/auth/confirm?type=signup&next=/login`
-          : undefined,
+        emailRedirectTo:
+          inferredOrigin &&
+          `${inferredOrigin}/api/auth/confirm?type=signup&next=/login`,
       },
     });
 
@@ -153,18 +159,22 @@ export default async function handler(req, res) {
         /already registered/i.test(raw) ||
         /already exists/i.test(raw) ||
         /duplicate key/i.test(raw) ||
-        /23505/.test(raw) // PG unique_violation
+        /23505/.test(raw)
       ) {
         return res.status(409).json({
           error: "That email is already registered. Try signing in instead.",
         });
       }
 
+      // Normalize short password messages that slip through
+      if (/password/i.test(raw) && /\b6\b|six|at least/i.test(raw)) {
+        return res
+          .status(400)
+          .json({ error: "Password must be at least 6 characters long." });
+      }
+
       // Email confirmation required
-      if (
-        /email not confirmed/i.test(raw) ||
-        error.code === "email_not_confirmed"
-      ) {
+      if (/email not confirmed/i.test(raw) || error.code === "email_not_confirmed") {
         return res
           .status(400)
           .json({ error: "Please confirm your email before signing in." });
@@ -179,10 +189,7 @@ export default async function handler(req, res) {
 
     // 2) Referral plumbing (best-effort; won't block signup)
     if (user?.id) {
-      // Ensure profile row exists (or skip if RLS blocks)
       await ensureProfileRow(supabase, user.id, user.email ?? email);
-
-      // Ensure the new user has a referral_code
       await ensureReferralCode(supabase, user.id);
 
       // If a referral cookie is present, attribute once
@@ -191,7 +198,6 @@ export default async function handler(req, res) {
         const refCode = cookies.ref || null;
 
         if (refCode) {
-          // Resolve inviter
           const { data: inviter } = await supabase
             .from("profiles")
             .select("id, referral_code")
@@ -199,14 +205,12 @@ export default async function handler(req, res) {
             .maybeSingle();
 
           if (inviter && inviter.id !== user.id) {
-            // Only set if not already set
             await supabase
               .from("profiles")
               .update({ referred_by: inviter.id })
               .eq("id", user.id)
               .is("referred_by", null);
 
-            // Optional audit/event row (if the table exists)
             try {
               await supabase.from("referral_events").insert({
                 ref_code: refCode,
