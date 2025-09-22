@@ -23,6 +23,7 @@ export default function MoldAutocomplete({
   placeholder = "Destroyer, Buzzz, Hex…",
   id = "mold",
   required = false,
+  clearable = true,
 }) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -85,25 +86,44 @@ export default function MoldAutocomplete({
     if (el) el.scrollIntoView({ block: "nearest" });
   }, [highlight, open]);
 
+  const showClear = clearable && (value ?? "").trim().length > 0;
+
   return (
     <div className={`pp-field pp-autocomplete ${open ? "is-open" : ""} ${className}`}>
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        className="pp-input"
-        type="text"
-        required={required}
-        value={value}
-        onChange={onInput}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        onKeyDown={onKeyDown}
-        placeholder={placeholder}
-        autoComplete="off"
-        aria-autocomplete="list"
-        aria-expanded={open ? "true" : "false"}
-        aria-controls={`${id}-listbox`}
-      />
+      <div className="pp-input-wrap">
+        <input
+          id={id}
+          className="pp-input"
+          type="text"
+          required={required}
+          value={value}
+          onChange={onInput}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          autoComplete="off"
+          aria-autocomplete="list"
+          aria-expanded={open ? "true" : "false"}
+          aria-controls={`${id}-listbox`}
+        />
+
+        {showClear && (
+          <button
+            type="button"
+            className="pp-input-clear"
+            aria-label={`Clear ${label}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onChange("");
+              setOpen(true);
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
       {open && suggestions.length > 0 && (
         <ul
           id={`${id}-listbox`}
@@ -130,6 +150,24 @@ export default function MoldAutocomplete({
     {/* Local styles so this component looks identical wherever it's used */}
       <style jsx>{`
         .pp-autocomplete { position: relative; }
+        .pp-input-wrap { position: relative; }
+        .pp-input-clear {
+          position: absolute;
+          right: 8px;
+          top: 50%;
+          transform: translateY(-50%);
+          border: 0;
+          background: transparent;
+          width: 24px;
+          height: 24px;
+          line-height: 1;
+          font-size: 18px;
+          border-radius: 999px;
+          cursor: pointer;
+          color: #666;
+        }
+        .pp-input-clear:hover { background: #f3f3f3; }
+        .pp-input-clear:focus-visible { outline: 2px solid var(--teal, #279989); }
         .pp-suggest {
           position: absolute;
           z-index: 40;
