@@ -78,11 +78,11 @@ export function ToastProvider({ children }) {
         .pp-toasts {
           position: fixed;
           z-index: 1000;
-          top: 20px;
+          bottom: 20px;
           left: 50%;
           transform: translateX(-50%);
           display: flex;
-          flex-direction: column;
+          flex-direction: column-reverse;
           align-items: center;
           gap: 12px;
           pointer-events: none; /* clicks pass through except on buttons */
@@ -142,15 +142,15 @@ export function ToastProvider({ children }) {
         }
 
         @keyframes slideIn {
-          from {
-            transform: translateY(-8px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
+   from {
+     transform: translateY(8px);
+     opacity: 0;
+   }
+   to {
+     transform: translateY(0);
+     opacity: 1;
+   }
+ }
 
         @media (max-width: 480px) {
           .pp-toasts {

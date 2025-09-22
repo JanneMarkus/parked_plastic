@@ -10,6 +10,8 @@ import { getBlurDataURL } from "@/lib/blurClient";
 import GlobalStyles from "@/components/GlobalStyles";
 import PlaceholderDisc from "@/components/PlaceholderDisc";
 import { BRANDS, FEATURED, computeBrandSuggestions } from "@/data/brands";
+import { useToast } from "@/components/ToastProvider";
+
 
 const supabase = getSupabaseBrowser();
 
@@ -236,6 +238,13 @@ export default function Home() {
   // Blur placeholder cache
   const [blurs, setBlurs] = useState({});
   const prefetchingRef = useRef(false);
+  // Branded toasts + Jump-to-results
+  const toast = useToast();
+  const firstLoadRef = useRef(true);
+
+  const resultsRef = useRef(null);
+  const filtersRef = useRef(null);
+  const [showJump, setShowJump] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search, 450);
 
@@ -265,7 +274,7 @@ export default function Home() {
         await navigator.share({ title: "Parked Plastic", text, url });
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
-        alert("Invite link copied to clipboard!");
+        toast.success("Invite link copied to clipboard!", { duration: 2000 });
       } else {
         // very old browsers
         window.prompt("Copy your invite link:", url);
@@ -480,6 +489,55 @@ export default function Home() {
     typePutter,
   ]);
 
+  // Branded toast after result changes
+  useEffect(() => {
+    if (loading) return;
+    if (firstLoadRef.current) {
+      firstLoadRef.current = false;
+      return;
+    }
+    toast.info(
+      `Listings updated — ${discs.length} result${discs.length === 1 ? "" : "s"}`,
+      { duration: 1600 }
+    );
+  }, [loading, discs.length, toast]);
+
+  // Show "Jump to results" ONLY when the filters section is visible on screen
+  useEffect(() => {
+    if (!filtersRef.current || typeof window === "undefined") return;
+    const el = filtersRef.current;
+
+    if (!("IntersectionObserver" in window)) {
+      setShowJump(true);
+      return;
+    }
+
+    const obs = new IntersectionObserver(
+      ([entry]) => setShowJump(entry.isIntersecting),
+      { root: null, threshold: 0.05 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const onJumpToResults = () => {
+    const el = resultsRef.current;
+    if (!el) return;
+    try {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      window.location.hash = "#results";
+    }
+    // Prevent focus from causing a second, unwanted scroll
+    requestAnimationFrame(() => {
+      try {
+        el.focus?.({ preventScroll: true });
+      } catch {
+        el.focus?.();
+      }
+    });
+  };
+
   // Fetch seller display names for the cards, in a single batched query
   useEffect(() => {
     let cancelled = false;
@@ -625,7 +683,7 @@ export default function Home() {
     if (cond == null) return "";
     const n = Number(cond);
     if (!Number.isFinite(n)) return "";
-    if (n >= 7) return "cond--good"; // 8–10 = Green
+    if (n >= 7) return "cond--good"; // 7–10 = Green
     if (n >= 5) return "cond--warn"; // 5–7  = Yellow
     return "cond--bad"; // ≤4   = Red
   }
@@ -650,7 +708,7 @@ export default function Home() {
         </p>
 
         {/* Filters */}
-        <section className="filters" aria-label="Search and filters">
+        <section ref={filtersRef} className="filters" aria-label="Search and filters">
           <form onSubmit={(e) => e.preventDefault()}>
             {/* Always-visible search row */}
             <div className="bar">
@@ -933,7 +991,13 @@ export default function Home() {
         </div>
 
         {/* Cards */}
-        <div className="grid-cards" aria-busy={loading ? "true" : "false"}>
+        <div
+          ref={resultsRef}
+          id="results"
+          tabIndex={-1}
+          className="grid-cards"
+          aria-busy={loading ? "true" : "false"}
+        >
           {discs.map((d, idx) => {
             const src = d.image_urls?.[0];
             const hasImage = !!src;
@@ -1066,6 +1130,21 @@ export default function Home() {
             </button>
           </div>
         </section>
+
+        {/* Floating Jump-to-results button */}
+        {showJump && (
+          <button
+            type="button"
+            className="pp-fab"
+            onClick={onJumpToResults}
+            aria-controls="results"
+            aria-label="Jump to results"
+            accessKey="r"
+            title="Jump to results (Alt/Option+Shift+R)"
+          >
+            Jump to results
+          </button>
+        )}
       </main>
 
       {/* Page-scoped styles that complement GlobalStyles (layout polish) */}
@@ -1285,6 +1364,37 @@ export default function Home() {
           background: #d64545; /* accessible red */
           color: #fff;
           border-color: rgba(0, 0, 0, 0.12);
+        }
+        
+
+        /* Floating action button: Jump to results */
+        .pp-fab {
+          position: fixed;
+          right: 14px;
+          bottom: 14px;
+          z-index: 1001;
+          border: 1px solid var(--cloud);
+          background: #fff;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+          border-radius: 999px;
+          padding: 10px 14px;
+          font-weight: 700;
+          font-size: 14px;
+          cursor: pointer;
+        }
+        .pp-fab:focus-visible {
+          outline: 3px solid #279989;
+          outline-offset: 2px;
+        }
+
+        /* Ensure anchored scrolls don't hide under the header */
+        #results {
+          scroll-margin-top: 120px; /* set to your header height */
+        }
+        @media (min-width: 768px) {
+          #results {
+            scroll-margin-top: 120px; /* if header is taller on desktop */
+          }
         }
       `}</style>
     </>
