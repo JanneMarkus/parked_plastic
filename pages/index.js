@@ -724,7 +724,7 @@ export default function Home() {
 
         {/* Filters */}
         <section className="filters" aria-label="Search and filters">
-+          <form onSubmit={(e) => e.preventDefault()}>
+          <form onSubmit={(e) => e.preventDefault()}>
             {/* Always-visible search row */}
             <div className="bar">
               <div className="pp-field grow">
