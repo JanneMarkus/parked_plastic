@@ -100,7 +100,6 @@ export default function GlobalStyles() {
       .pp-field {
         display: flex;
         flex-direction: column;
-        gap: 6px;
       }
       .pp-field label {
         font-family: var(--font-poppins);

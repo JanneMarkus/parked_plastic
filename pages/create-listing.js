@@ -6,7 +6,8 @@ import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ImageUploader from "@/components/ImageUploader";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
-import { FEATURED, computeBrandSuggestions } from "@/data/brands";
+import { BRANDS, FEATURED_COUNT } from "@/data/brands";
+import BrandAutocomplete from "@/components/BrandAutocomplete";
 
 /* --------------------------- Server-side auth gate --------------------------- */
 export async function getServerSideProps(ctx) {
@@ -72,45 +73,7 @@ export default function CreateListing({ user }) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // --- Brand autocomplete state & logic ---
-  const [brandOpen, setBrandOpen] = useState(false);
-  const [brandHighlight, setBrandHighlight] = useState(-1);
-
-  const brandSuggestions = useMemo(() => computeBrandSuggestions(brand), [brand]);
-
-  const onBrandFocus = () => setBrandOpen(true);
-  const onBrandBlur = () => {
-    setTimeout(() => setBrandOpen(false), 80);
-  };
-  const chooseBrand = (name) => {
-    if (name === "Other") setBrand("Other");
-    else setBrand(name);
-    setBrandOpen(false);
-    setBrandHighlight(-1);
-  };
-  const onBrandKeyDown = (e) => {
-    if (!brandOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-      setBrandOpen(true);
-      return;
-    }
-    if (!brandOpen) return;
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setBrandHighlight((i) => Math.min(i + 1, brandSuggestions.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setBrandHighlight((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter") {
-      if (brandHighlight >= 0 && brandHighlight < brandSuggestions.length) {
-        e.preventDefault();
-        chooseBrand(brandSuggestions[brandHighlight]);
-      }
-    } else if (e.key === "Escape") {
-      setBrandOpen(false);
-      setBrandHighlight(-1);
-    }
-  };
+  
 
   // Number helpers for Turn control
   function toHalfStep(n) { return Math.round(n * 2) / 2; }
@@ -285,46 +248,18 @@ export default function CreateListing({ user }) {
             </div>
 
             {/* Brand | Mold */}
-            <div className="field pp-autocomplete">
-              <label htmlFor="brand">Brand*</label>
-              <input
+            <div className="field">
+              <BrandAutocomplete
+                label="Brand*"
                 id="brand"
-                type="text"
                 value={brand}
+                onChange={setBrand}
+                list={BRANDS}
+                featuredCount={FEATURED_COUNT}
+                includeOther={false}   // create mode: no “Other”
+                className="pp-autocomplete"
                 required
-                onChange={(e) => { setBrand(e.target.value); setBrandOpen(true); }}
-                onFocus={onBrandFocus}
-                onBlur={onBrandBlur}
-                onKeyDown={onBrandKeyDown}
-                aria-autocomplete="list"
-                aria-expanded={brandOpen ? "true" : "false"}
-                aria-controls="brand-listbox"
-                placeholder="Innova, Discraft, MVP…"
-                autoComplete="off"
               />
-              {brandOpen && brandSuggestions.length > 0 && (
-                <ul
-                  id="brand-listbox"
-                  role="listbox"
-                  className="pp-suggest"
-                  aria-label="Brand suggestions"
-                >
-                  {brandSuggestions.map((name, i) => (
-                    <li
-                      key={name}
-                      role="option"
-                      aria-selected={i === brandHighlight}
-                      className={`pp-suggest-item ${i === brandHighlight ? "is-active" : ""}`}
-                      onMouseDown={(e) => e.preventDefault()}  // keep focus
-                      onClick={() => chooseBrand(name)}
-                      onMouseEnter={() => setBrandHighlight(i)}
-                    >
-                      {name}
-                      {FEATURED.includes(name)}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
 
             <div className="field">
@@ -629,45 +564,5 @@ const styles = `
     h1 { font-size: 2rem; }
     .wrap { margin: 32px auto 80px; padding: 0 16px; }
     .grid2 { grid-template-columns: 1fr 1fr; gap: 16px 16px; }
-  }
-
-  /* Autocomplete (parity with Index/Edit pages) */
-  .pp-autocomplete { position: relative; }
-  .pp-suggest {
-    position: absolute;
-    z-index: 40;
-    top: calc(100% + 6px);
-    left: 0;
-    right: 0;
-    background: #fff;
-    border: 1px solid var(--cloud);
-    border-radius: 10px;
-    box-shadow: 0 10px 24px rgba(0,0,0,.08);
-    padding: 6px;
-    max-height: 280px;
-    overflow: auto;
-  }
-  .pp-suggest-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    user-select: none;
-    font-size: 14px;
-  }
-  .pp-suggest-item:hover,
-  .pp-suggest-item.is-active {
-    background: #f7fbfa;
-  }
-  .pp-suggest .pill {
-    font-size: 11px;
-    border: 1px solid var(--cloud);
-    padding: 2px 6px;
-    border-radius: 999px;
-    color: var(--storm);
-    background: #fff;
   }
 `;

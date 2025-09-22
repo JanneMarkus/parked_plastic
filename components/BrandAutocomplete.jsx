@@ -29,6 +29,7 @@ export default function BrandAutocomplete({
   className = "",
   placeholder = "Innova, Discraft, MVP…",
   id = "brand",
+  required = false,
 }) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -117,6 +118,7 @@ export default function BrandAutocomplete({
       <input
         id={id}
         className="pp-input"
+        required={required}
         type="text"
         value={value}
         onChange={onInput}
@@ -190,6 +192,13 @@ export default function BrandAutocomplete({
           border-bottom-right-radius: 0;
           border-bottom-color: transparent; /* avoid double border at the seam */
         }
+        /* 1) Anchor the absolutely-positioned menu to this wrapper */
+.pp-autocomplete { position: relative; }
+
+/* 2) When the input has the 4px focus ring, pull the menu up by 4px */
+.pp-autocomplete.is-open :global(.pp-input:focus) + .pp-suggest {
+  top: calc(100% - 4px);
+}
       `}</style>
     </div>
   );
