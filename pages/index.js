@@ -502,37 +502,48 @@ export default function Home() {
     );
   }, [loading, discs.length, toast]);
 
-  // Show "Jump to results" only when the results grid is NOT sufficiently visible
+  // Show "Jump to results" ONLY when the results grid is NOT sufficiently visible.
+  // Responsive thresholds/margins so it doesn’t stick on mobile.
   useEffect(() => {
-    if (!resultsRef.current || typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
     const el = resultsRef.current;
-
+    if (!el) return;
     if (!("IntersectionObserver" in window)) {
       setShowJump(true);
       return;
     }
 
-    // Consider "visible" only if ≥30% of the results grid is in view
-    const VISIBLE_RATIO = 0.20;
-    const HEADER_OFFSET_PX = 120; // adjust if your header height changes
+    let obs;
+    const setup = () => {
+      const isSmall = window.matchMedia("(max-width: 640px)").matches;
+      const VISIBLE_RATIO = isSmall ? 0.20 : 0.20;   // looser on small screens
+      const HEADER_OFFSET_PX = isSmall ? 120 : 120;  // match your header heights
 
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        const sufficientlyVisible =
-          entry.isIntersecting && entry.intersectionRatio >= VISIBLE_RATIO;
-        setShowJump(!sufficientlyVisible);
-      },
-      {
-        root: null,
-        // Pull the effective viewport down by the header so top-of-grid counts correctly
-        rootMargin: `-${HEADER_OFFSET_PX}px 0px 0px 0px`,
-        // Multiple thresholds gives us stable intersectionRatio values
-        threshold: [0, 0.1, 0.2, 0.3, 0.5, 0.75, 1],
-      }
-    );
+      obs?.disconnect();
+      obs = new IntersectionObserver(
+        ([entry]) => {
+          const sufficientlyVisible =
+            entry.isIntersecting && entry.intersectionRatio >= VISIBLE_RATIO;
+          setShowJump(!sufficientlyVisible);
+        },
+        {
+          root: null,
+          // Push the “viewport” down by the header to judge top visibility correctly
+          rootMargin: `-${HEADER_OFFSET_PX}px 0px 0px 0px`,
+          threshold: [0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1],
+        }
+      );
+      obs.observe(el);
+    };
 
-    obs.observe(el);
-    return () => obs.disconnect();
+    setup();
+    window.addEventListener("resize", setup);
+    window.addEventListener("orientationchange", setup);
+    return () => {
+      obs?.disconnect();
+      window.removeEventListener("resize", setup);
+      window.removeEventListener("orientationchange", setup);
+    };
   }, []);
 
   const onJumpToResults = () => {
