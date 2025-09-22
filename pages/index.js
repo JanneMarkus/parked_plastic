@@ -12,7 +12,6 @@ import PlaceholderDisc from "@/components/PlaceholderDisc";
 import { BRANDS, FEATURED, computeBrandSuggestions } from "@/data/brands";
 import { useToast } from "@/components/ToastProvider";
 
-
 const supabase = getSupabaseBrowser();
 
 const poppins = Poppins({
@@ -243,7 +242,6 @@ export default function Home() {
   const firstLoadRef = useRef(true);
 
   const resultsRef = useRef(null);
-  const filtersRef = useRef(null);
   const [showJump, setShowJump] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search, 450);
@@ -497,25 +495,42 @@ export default function Home() {
       return;
     }
     toast.info(
-      `Listings updated — ${discs.length} result${discs.length === 1 ? "" : "s"}`,
+      `Listings updated — ${discs.length} result${
+        discs.length === 1 ? "" : "s"
+      }`,
       { duration: 1600 }
     );
   }, [loading, discs.length, toast]);
 
-  // Show "Jump to results" ONLY when the filters section is visible on screen
+  // Show "Jump to results" only when the results grid is NOT sufficiently visible
   useEffect(() => {
-    if (!filtersRef.current || typeof window === "undefined") return;
-    const el = filtersRef.current;
+    if (!resultsRef.current || typeof window === "undefined") return;
+    const el = resultsRef.current;
 
     if (!("IntersectionObserver" in window)) {
       setShowJump(true);
       return;
     }
 
+    // Consider "visible" only if ≥30% of the results grid is in view
+    const VISIBLE_RATIO = 0.20;
+    const HEADER_OFFSET_PX = 120; // adjust if your header height changes
+
     const obs = new IntersectionObserver(
-      ([entry]) => setShowJump(entry.isIntersecting),
-      { root: null, threshold: 0.05 }
+      ([entry]) => {
+        const sufficientlyVisible =
+          entry.isIntersecting && entry.intersectionRatio >= VISIBLE_RATIO;
+        setShowJump(!sufficientlyVisible);
+      },
+      {
+        root: null,
+        // Pull the effective viewport down by the header so top-of-grid counts correctly
+        rootMargin: `-${HEADER_OFFSET_PX}px 0px 0px 0px`,
+        // Multiple thresholds gives us stable intersectionRatio values
+        threshold: [0, 0.1, 0.2, 0.3, 0.5, 0.75, 1],
+      }
     );
+
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
@@ -708,8 +723,8 @@ export default function Home() {
         </p>
 
         {/* Filters */}
-        <section ref={filtersRef} className="filters" aria-label="Search and filters">
-          <form onSubmit={(e) => e.preventDefault()}>
+        <section className="filters" aria-label="Search and filters">
++          <form onSubmit={(e) => e.preventDefault()}>
             {/* Always-visible search row */}
             <div className="bar">
               <div className="pp-field grow">
@@ -1131,20 +1146,20 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Floating Jump-to-results button */}
-        {showJump && (
-          <button
-            type="button"
-            className="pp-fab"
-            onClick={onJumpToResults}
-            aria-controls="results"
-            aria-label="Jump to results"
-            accessKey="r"
-            title="Jump to results (Alt/Option+Shift+R)"
-          >
-            Jump to results
-          </button>
-        )}
+        {/* Floating Jump-to-results button (animated show/hide) */}
+        <button
+          type="button"
+          className={`pp-fab ${showJump ? "is-visible" : ""}`}
+          onClick={onJumpToResults}
+          aria-controls="results"
+          aria-label="Jump to results"
+          aria-hidden={showJump ? "false" : "true"}
+          tabIndex={showJump ? 0 : -1}
+          accessKey="r"
+          title="Jump to results (Alt/Option+Shift+R)"
+        >
+          Jump to results
+        </button>
       </main>
 
       {/* Page-scoped styles that complement GlobalStyles (layout polish) */}
@@ -1365,26 +1380,92 @@ export default function Home() {
           color: #fff;
           border-color: rgba(0, 0, 0, 0.12);
         }
-        
 
-        /* Floating action button: Jump to results */
-        .pp-fab {
+        /* Floating action button: Jump to results (on-brand) */
+.pp-fab {
           position: fixed;
           right: 14px;
           bottom: 14px;
           z-index: 1001;
-          border: 1px solid var(--cloud);
-          background: #fff;
-          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+          border: none;
+          background: var(--teal, #279989); /* brand teal */
+          color: #fff;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18),
+            0 2px 0 rgba(0, 0, 0, 0.02) inset;
           border-radius: 999px;
-          padding: 10px 14px;
-          font-weight: 700;
+          padding: 12px 18px 12px 44px; /* extra left for icon */
+          font-weight: 800;
           font-size: 14px;
+          letter-spacing: 0.2px;
           cursor: pointer;
+          /* animation base (hidden state) */
+          opacity: 0;
+          transform: translateY(12px);
+          pointer-events: none;
+          transition: opacity 160ms ease, transform 160ms ease;
+         }
+        .pp-fab.is-visible {
+          opacity: 1;
+          transform: translateY(0);
+          pointer-events: auto;
+        }
+          transition: transform 120ms ease, box-shadow 120ms ease,
+            background 120ms ease;
+        }
+        .pp-fab::before {
+          content: "";
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 22px;
+          height: 22px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.18);
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+        }
+        .pp-fab::after {
+          /* Down chevron using currentColor (white) */
+          content: "";
+          position: absolute;
+          left: 18px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 10px;
+          height: 10px;
+          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+          background-repeat: no-repeat;
+          background-position: center;
+        }
+        .pp-fab:hover {
+          background: var(--teal-dark, #1e7a6f);
+          transform: translateY(-1px);
+          box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22),
+            0 2px 0 rgba(0, 0, 0, 0.04) inset;
+        }
+        .pp-fab:active {
+          transform: translateY(0);
+          box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18),
+            0 1px 0 rgba(0, 0, 0, 0.04) inset;
         }
         .pp-fab:focus-visible {
-          outline: 3px solid #279989;
-          outline-offset: 2px;
+          outline: none;
+          box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--teal, #279989),
+            0 10px 24px rgba(0, 0, 0, 0.18);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .pp-fab {
+            transition: none;
+          }
+        }
+        @media (prefers-color-scheme: dark) {
+          .pp-fab {
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.36),
+              0 2px 0 rgba(255, 255, 255, 0.03) inset;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .pp-fab { transition: none; }
         }
 
         /* Ensure anchored scrolls don't hide under the header */
