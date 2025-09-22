@@ -1101,9 +1101,9 @@ export default function Home() {
                 <div className="content">
                   <h2 className="cardTitle">{d.title}</h2>
 
-                  {/* Seller name (button to avoid nested <a>) */}
-                  {d.owner && sellerNames[d.owner] && (
-                    <div className="sellerLine">
+                  {/* Seller name row with reserved space */}
+                  <div className="sellerLine">
+                    {d.owner && sellerNames[d.owner] ? (
                       <button
                         type="button"
                         className="asLink"
@@ -1125,8 +1125,10 @@ export default function Home() {
                       >
                         {sellerNames[d.owner]}
                       </button>
-                    </div>
-                  )}
+                    ) : (
+                      <span className="sellerPlaceholder">&nbsp;</span>
+                    )}
+                  </div>
 
                   {/* Flight numbers compact line */}
                   {d.speed != null &&
@@ -1378,6 +1380,16 @@ export default function Home() {
           gap: 10px;
           justify-content: center;
           flex-wrap: wrap;
+        }
+
+        /* Reserve space for seller names to prevent layout shift */
+        .sellerLine {
+          min-height: 1.5em; /* matches one line of text */
+        }
+        .sellerPlaceholder {
+          display: inline-block;
+          width: 100%;
+          height: 1.5em;
         }
 
         /* Condition pill base */
