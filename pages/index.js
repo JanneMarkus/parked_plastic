@@ -487,27 +487,41 @@ export default function Home() {
     typePutter,
   ]);
 
-  // Branded toast after result changes
+  // Branded toast after result changes (only when filters drawer is open)
   useEffect(() => {
+    if (!showFilters) return; // <-- don't toast if drawer is closed
     if (loading) return;
     if (firstLoadRef.current) {
       firstLoadRef.current = false;
       return;
     }
-    toast.info(
+    const id = toast.info(
       `Listings updated — ${discs.length} result${
         discs.length === 1 ? "" : "s"
       }`,
       { duration: 1600 }
     );
-  }, [loading, discs.length, toast]);
 
-  // Show "Jump to results" ONLY when the results grid is NOT sufficiently visible.
-  // Responsive thresholds/margins so it doesn’t stick on mobile.
+    // If something re-renders fast or drawer closes, best-effort dismiss
+    return () => {
+      try {
+        toast.dismiss?.(id);
+      } catch {}
+    };
+  }, [loading, discs.length, toast, showFilters]);
+
+  // Show "Jump to results" ONLY when results grid is sufficiently visible AND drawer is open
   useEffect(() => {
     if (typeof window === "undefined") return;
     const el = resultsRef.current;
     if (!el) return;
+
+    // If drawer is closed, ensure FAB is hidden and skip observer
+    if (!showFilters) {
+      setShowJump(false);
+      return;
+    }
+
     if (!("IntersectionObserver" in window)) {
       setShowJump(true);
       return;
@@ -517,12 +531,11 @@ export default function Home() {
     const setup = () => {
       const isSmall = window.matchMedia("(max-width: 640px)").matches;
       const HEADER_OFFSET_PX = 120; // match header height
-      const VISIBLE_VH = isSmall ? 0.55 : 0.45; // portion of viewport the results must occupy
+      const VISIBLE_VH = isSmall ? 0.55 : 0.45;
 
       obs?.disconnect();
       obs = new IntersectionObserver(
         ([entry]) => {
-          // How much of the viewport is covered by the results, regardless of the results' total height
           const visiblePortionOfViewport =
             entry.intersectionRect.height / window.innerHeight;
           const sufficientlyVisible =
@@ -531,7 +544,6 @@ export default function Home() {
         },
         {
           root: null,
-          // Push the “viewport” down by the header to judge top visibility correctly
           rootMargin: `-${HEADER_OFFSET_PX}px 0px 0px 0px`,
           threshold: [0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1],
         }
@@ -547,7 +559,7 @@ export default function Home() {
       window.removeEventListener("resize", setup);
       window.removeEventListener("orientationchange", setup);
     };
-  }, []);
+  }, [showFilters]); // <-- re-run when drawer opens/closes
 
   const onJumpToResults = () => {
     const el = resultsRef.current;
@@ -1163,12 +1175,12 @@ export default function Home() {
         {/* Floating Jump-to-results button (animated show/hide) */}
         <button
           type="button"
-          className={`pp-fab ${showJump ? "is-visible" : ""}`}
+          className={`pp-fab ${showJump && showFilters ? "is-visible" : ""}`}
           onClick={onJumpToResults}
           aria-controls="results"
           aria-label="Jump to results"
-          aria-hidden={showJump ? "false" : "true"}
-          tabIndex={showJump ? 0 : -1}
+          aria-hidden={showJump && showFilters ? "false" : "true"}
+          tabIndex={showJump && showFilters ? 0 : -1}
           accessKey="r"
           title="Jump to results (Alt/Option+Shift+R)"
         >
@@ -1396,97 +1408,105 @@ export default function Home() {
         }
 
         /* Floating action button: Jump to results (on-brand) */
-.pp-fab {
-  position: fixed;
-  left: 50%;
-  /* Hidden/base state: centered X, offset 12px down for slide-in */
-  transform: translate(-50%, 12px);
-  /* Lift the FAB above any visible toasts + safe area */
-  bottom: calc(14px + var(--toast-stack-height, 0px) + env(safe-area-inset-bottom, 0px));
-  z-index: 1001;
+        .pp-fab {
+          position: fixed;
+          left: 50%;
+          /* Hidden/base state: centered X, offset 12px down for slide-in */
+          transform: translate(-50%, 12px);
+          /* Lift the FAB above any visible toasts + safe area */
+          bottom: calc(
+            14px + var(--toast-stack-height, 0px) +
+              env(safe-area-inset-bottom, 0px)
+          );
+          z-index: 1001;
 
-  border: none;
-  background: var(--teal, #279989); /* brand teal */
-  color: #fff;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18), 0 2px 0 rgba(0, 0, 0, 0.02) inset;
-  border-radius: 999px;
-  padding: 12px 18px 12px 44px; /* extra left for icon */
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: 0.2px;
-  cursor: pointer;
+          border: none;
+          background: var(--teal, #279989); /* brand teal */
+          color: #fff;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18),
+            0 2px 0 rgba(0, 0, 0, 0.02) inset;
+          border-radius: 999px;
+          padding: 12px 18px 12px 44px; /* extra left for icon */
+          font-weight: 800;
+          font-size: 14px;
+          letter-spacing: 0.2px;
+          cursor: pointer;
 
-  opacity: 0;
-  pointer-events: none;
+          opacity: 0;
+          pointer-events: none;
 
-  /* One transition list; avoid duplicate transform declarations elsewhere */
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease,
-    background 120ms ease,
-    box-shadow 120ms ease;
-}
+          /* One transition list; avoid duplicate transform declarations elsewhere */
+          transition: opacity 160ms ease, transform 160ms ease,
+            background 120ms ease, box-shadow 120ms ease;
+        }
 
-.pp-fab.is-visible {
-  opacity: 1;
-  transform: translate(-50%, 0); /* centered and visible */
-  pointer-events: auto;
-}
+        .pp-fab.is-visible {
+          opacity: 1;
+          transform: translate(-50%, 0); /* centered and visible */
+          pointer-events: auto;
+        }
 
-.pp-fab::before {
-  content: "";
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
-}
+        .pp-fab::before {
+          content: "";
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 22px;
+          height: 22px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.18);
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+        }
 
-.pp-fab::after {
-  /* Down chevron using currentColor (white) */
-  content: "";
-  position: absolute;
-  left: 18px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 10px;
-  height: 10px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
-  background-repeat: no-repeat;
-  background-position: center;
-}
+        .pp-fab::after {
+          /* Down chevron using currentColor (white) */
+          content: "";
+          position: absolute;
+          left: 18px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 10px;
+          height: 10px;
+          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+          background-repeat: no-repeat;
+          background-position: center;
+        }
 
-.pp-fab:hover {
-  background: var(--teal-dark, #1e7a6f);
-  transform: translate(-50%, -1px); /* slight lift while staying centered */
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22), 0 2px 0 rgba(0, 0, 0, 0.04) inset;
-}
+        .pp-fab:hover {
+          background: var(--teal-dark, #1e7a6f);
+          transform: translate(
+            -50%,
+            -1px
+          ); /* slight lift while staying centered */
+          box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22),
+            0 2px 0 rgba(0, 0, 0, 0.04) inset;
+        }
 
-.pp-fab:active {
-  transform: translate(-50%, 0); /* settle back on press */
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18), 0 1px 0 rgba(0, 0, 0, 0.04) inset;
-}
+        .pp-fab:active {
+          transform: translate(-50%, 0); /* settle back on press */
+          box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18),
+            0 1px 0 rgba(0, 0, 0, 0.04) inset;
+        }
 
-.pp-fab:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--teal, #279989), 0 10px 24px rgba(0, 0, 0, 0.18);
-}
+        .pp-fab:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--teal, #279989),
+            0 10px 24px rgba(0, 0, 0, 0.18);
+        }
 
-@media (prefers-reduced-motion: reduce) {
-  .pp-fab {
-    transition: none;
-  }
-}
+        @media (prefers-reduced-motion: reduce) {
+          .pp-fab {
+            transition: none;
+          }
+        }
 
-@media (prefers-color-scheme: dark) {
-  .pp-fab {
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.36), 0 2px 0 rgba(255, 255, 255, 0.03) inset;
-  }
-}
+        @media (prefers-color-scheme: dark) {
+          .pp-fab {
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.36),
+              0 2px 0 rgba(255, 255, 255, 0.03) inset;
+          }
+        }
 
         /* Ensure anchored scrolls don't hide under the header */
         #results {
