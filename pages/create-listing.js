@@ -1,13 +1,14 @@
 // pages/create-listing.js
-import { use, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/ToastProvider";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ImageUploader from "@/components/ImageUploader";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
-import { BRANDS, FEATURED_COUNT } from "@/data/brands";
+import { BRANDS, FEATURED_COUNT, getMoldsForBrand } from "@/data/brands-molds";
 import BrandAutocomplete from "@/components/BrandAutocomplete";
+import MoldAutocomplete from "@/components/MoldAutocomplete";
 
 /* --------------------------- Server-side auth gate --------------------------- */
 export async function getServerSideProps(ctx) {
@@ -30,7 +31,10 @@ export async function getServerSideProps(ctx) {
 
 // ---- Helpers for datalist option generation ----
 const range = (start, end, step = 1) =>
-  Array.from({ length: Math.floor((end - start) / step) + 1 }, (_, i) => start + i * step);
+  Array.from(
+    { length: Math.floor((end - start) / step) + 1 },
+    (_, i) => start + i * step
+  );
 const fmt = (n) => (Number.isInteger(n) ? String(n) : String(n.toFixed(1)));
 
 /* ---------------------------------- Page ---------------------------------- */
@@ -50,13 +54,24 @@ export default function CreateListing({ user }) {
   // Datalist options (memoized)
   const speedOptions = useMemo(() => range(1, 15, 0.5).map(fmt), []);
   const glideOptions = useMemo(() => range(1, 7, 1).map(fmt), []);
-  const turnOptions  = useMemo(() => range(-5, 1, 0.5).map(fmt), []);
-  const fadeOptions  = useMemo(() => range(0, 6, 0.5).map(fmt), []);
+  const turnOptions = useMemo(() => range(-5, 1, 0.5).map(fmt), []);
+  const fadeOptions = useMemo(() => range(0, 6, 0.5).map(fmt), []);
 
   // Form state
   const [title, setTitle] = useState("");
   const [brand, setBrand] = useState("");
   const [mold, setMold] = useState("");
+  const moldsForBrand = useMemo(() => getMoldsForBrand(brand), [brand]);
+
+  // If brand changes and current mold isn’t in that brand’s set, clear it
+  useEffect(() => {
+    if (!brand) {
+      setMold("");
+      return;
+    }
+    const ok = new Set(moldsForBrand.map((m) => m.toLowerCase()));
+    if (mold && !ok.has(mold.toLowerCase())) setMold("");
+  }, [brand, moldsForBrand, mold]); // keep mold valid for the chosen brand
   const [plastic, setPlastic] = useState("");
   const [conditionScore, setConditionScore] = useState(""); // 1–10
   const [weight, setWeight] = useState("");
@@ -67,17 +82,21 @@ export default function CreateListing({ user }) {
 
   // Images (from new uploader)
   const [imageItems, setImageItems] = useState([]); // full objects from uploader
-  const imageUrls = imageItems.filter((i) => i.status === "done").map((i) => i.url);
+  const imageUrls = imageItems
+    .filter((i) => i.status === "done")
+    .map((i) => i.url);
 
   // UI state
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  
-
   // Number helpers for Turn control
-  function toHalfStep(n) { return Math.round(n * 2) / 2; }
-  function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+  function toHalfStep(n) {
+    return Math.round(n * 2) / 2;
+  }
+  function clamp(val, min, max) {
+    return Math.max(min, Math.min(max, val));
+  }
   function parseLocaleNumber(v) {
     const s = String(v).replace("−", "-").replace(",", ".");
     const n = Number(s);
@@ -109,7 +128,8 @@ export default function CreateListing({ user }) {
     }
 
     // ---- Flight number validation (required, ranges, .5 step) ----
-    const stepIsValid = (v) => Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
+    const stepIsValid = (v) =>
+      Number.isFinite(v) && Math.abs(v * 2 - Math.round(v * 2)) < 1e-9;
     const numOrNaN = (s) => (s === "" ? NaN : Number(s));
     const s = numOrNaN(speed),
       g = numOrNaN(glide),
@@ -134,12 +154,16 @@ export default function CreateListing({ user }) {
     const priceNum = price.trim() === "" ? null : Number(price);
 
     // Sleepy Scale condition (optional)
-    const condNumRaw = conditionScore.trim() === "" ? null : Number(conditionScore);
+    const condNumRaw =
+      conditionScore.trim() === "" ? null : Number(conditionScore);
     if (condNumRaw !== null && !Number.isFinite(condNumRaw)) {
       setErrorMsg("Condition must be a number 1–10.");
       return;
     }
-    const condNum = condNumRaw === null ? null : Math.max(1, Math.min(10, Math.round(condNumRaw)));
+    const condNum =
+      condNumRaw === null
+        ? null
+        : Math.max(1, Math.min(10, Math.round(condNumRaw)));
 
     setLoading(true);
     try {
@@ -218,8 +242,8 @@ export default function CreateListing({ user }) {
             <div className="field span2">
               <label>Images</label>
               <ImageUploader
-                supabase={supabase}   // ✅ browser client
-                userId={user.id}      // ✅ auth user id from GSSP
+                supabase={supabase} // ✅ browser client
+                userId={user.id} // ✅ auth user id from GSSP
                 bucket="listing-images"
                 maxFiles={10}
                 maxFileMB={12}
@@ -228,7 +252,8 @@ export default function CreateListing({ user }) {
                 onChange={setImageItems}
               />
               <p className="hintRow">
-                Tip: Use good light and a clean background. Suggested angles: Front, back, side profile.
+                Tip: Use good light and a clean background. Suggested angles:
+                Front, back, side profile.
               </p>
             </div>
 
@@ -256,22 +281,23 @@ export default function CreateListing({ user }) {
                 onChange={setBrand}
                 list={BRANDS}
                 featuredCount={FEATURED_COUNT}
-                includeOther={false}   // create mode: no “Other”
+                includeOther={false} // create mode: no “Other”
                 className="pp-autocomplete"
                 required
               />
             </div>
 
             <div className="field">
-              <label htmlFor="mold">Mold*</label>
-              <input
+              <MoldAutocomplete
+                label="Mold*"
                 id="mold"
-                type="text"
                 value={mold}
-                required
-                onChange={(e) => setMold(e.target.value)}
+                onChange={setMold}
+                list={moldsForBrand} // ← brand-dependent list
+                includeOther={false} // create mode: no “Other”
                 placeholder="Destroyer, Buzzz, Hex…"
-                autoComplete="off"
+                required
+                className="pp-autocomplete"
               />
             </div>
 
@@ -359,20 +385,30 @@ export default function CreateListing({ user }) {
                   />
                 </div>
               </div>
-              <p className="hintRow">Use 0.5 increments. Example format: 12 / 5 / -1 / 3</p>
+              <p className="hintRow">
+                Use 0.5 increments. Example format: 12 / 5 / -1 / 3
+              </p>
 
               {/* Datalists for optional dropdowns */}
               <datalist id="speedOptions">
-                {speedOptions.map((v) => <option key={v} value={v} />)}
+                {speedOptions.map((v) => (
+                  <option key={v} value={v} />
+                ))}
               </datalist>
               <datalist id="glideOptions">
-                {glideOptions.map((v) => <option key={v} value={v} />)}
+                {glideOptions.map((v) => (
+                  <option key={v} value={v} />
+                ))}
               </datalist>
               <datalist id="turnOptions">
-                {turnOptions.map((v) => <option key={v} value={v} />)}
+                {turnOptions.map((v) => (
+                  <option key={v} value={v} />
+                ))}
               </datalist>
               <datalist id="fadeOptions">
-                {fadeOptions.map((v) => <option key={v} value={v} />)}
+                {fadeOptions.map((v) => (
+                  <option key={v} value={v} />
+                ))}
               </datalist>
             </div>
 
@@ -389,47 +425,47 @@ export default function CreateListing({ user }) {
               />
             </div>
             <div className="field">
-  <label htmlFor="condition">Condition*</label>
-  <input
-    id="condition"
-    type="number"
-    min={1}
-    max={10}
-    step={1}
-    inputMode="numeric"
-    placeholder="e.g., 8"
-    required
-    value={conditionScore}
-    onChange={(e) => setConditionScore(e.target.value)}
-    onBlur={() => {
-      setConditionScore((prev) => {
-        if (prev === "") return prev;
-        const n = Number(prev);
-        if (!Number.isFinite(n)) return "";
-        return String(Math.max(1, Math.min(10, Math.round(n))));
-      });
-    }}
-    list="conditionOptions"
-  />
-  <datalist id="conditionOptions">
-    {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
-      <option key={v} value={v} />
-    ))}
-  </datalist>
+              <label htmlFor="condition">Condition*</label>
+              <input
+                id="condition"
+                type="number"
+                min={1}
+                max={10}
+                step={1}
+                inputMode="numeric"
+                placeholder="e.g., 8"
+                required
+                value={conditionScore}
+                onChange={(e) => setConditionScore(e.target.value)}
+                onBlur={() => {
+                  setConditionScore((prev) => {
+                    if (prev === "") return prev;
+                    const n = Number(prev);
+                    if (!Number.isFinite(n)) return "";
+                    return String(Math.max(1, Math.min(10, Math.round(n))));
+                  });
+                }}
+                list="conditionOptions"
+              />
+              <datalist id="conditionOptions">
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
 
-  <p className="hintRow">
-    Sleepy Scale (1–10): 1 = Extremely beat • 10 = Brand new
-  </p>
-  <p className="hintRow">
-    <a
-      target="_blank"
-      rel="noopener noreferrer"
-      href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
-    >
-      Learn more about Sleepy Scale here
-    </a>
-  </p>
-</div>
+              <p className="hintRow">
+                Sleepy Scale (1–10): 1 = Extremely beat • 10 = Brand new
+              </p>
+              <p className="hintRow">
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href="https://www.dgcoursereview.com/threads/understanding-the-sleepy-scale-with-pics-and-check-list.89392/"
+                >
+                  Learn more about Sleepy Scale here
+                </a>
+              </p>
+            </div>
 
             {/* Weight | Price */}
             <div className="field">
@@ -529,7 +565,7 @@ const styles = `
   }
   .wrap { max-width: 960px; margin: 24px auto 80px; padding: 0 12px; background: var(--sea); }
   .titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; color: --storm; letter-spacing: .5px; margin: 0; font-size: 1.6rem; }
+  h1 { font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--storm); letter-spacing: .5px; margin: 0; font-size: 1.6rem; }
   .subtle { color: var(--char); opacity: .85; margin: 0; }
   .statusRegion { min-height: 22px; margin-bottom: 8px; }
   .error, .info { border-radius: 10px; padding: 10px 12px; font-size: .95rem; margin: 8px 0; }

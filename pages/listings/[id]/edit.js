@@ -6,8 +6,9 @@ import { useRouter } from "next/router";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import ImageUploader from "@/components/ImageUploader";
 import { createSupabaseServerClient } from "@/utils/supabase/server";
-import { BRANDS, FEATURED_COUNT } from "@/data/brands";
+import { BRANDS, FEATURED_COUNT, getMoldsForBrand } from "@/data/brands-molds";
 import BrandAutocomplete from "@/components/BrandAutocomplete";
+import MoldAutocomplete from "@/components/MoldAutocomplete";
 
 // ---- Helpers for datalist option generation ----
 const range = (start, end, step = 1) =>
@@ -74,6 +75,8 @@ export default function EditListing({ initialUser, initialDisc }) {
   const [title, setTitle] = useState("");
   const [brand, setBrand] = useState("");
   const [mold, setMold] = useState("");
+  const moldsForBrand = useMemo(() => getMoldsForBrand(brand), [brand]);
+
   const [plastic, setPlastic] = useState("");
   const [conditionScore, setConditionScore] = useState(""); // 1–10
   const [weight, setWeight] = useState("");
@@ -130,6 +133,15 @@ export default function EditListing({ initialUser, initialDisc }) {
       return String(clamp(toHalfStep(n), -5, 1));
     });
   }
+
+  useEffect(() => {
+    if (!brand) {
+      setMold("");
+      return;
+    }
+    const ok = new Set(moldsForBrand.map((m) => m.toLowerCase()));
+    if (mold && !ok.has(mold.toLowerCase())) setMold("");
+  }, [brand, moldsForBrand, mold]);
 
   // Seed from SSR (already authenticated & owner-checked)
   useEffect(() => {
@@ -389,16 +401,16 @@ export default function EditListing({ initialUser, initialDisc }) {
                 required
               />
             </div>
-            <div className="field">
-              <label htmlFor="mold">Mold*</label>
-              <input
+            <div className="field pp-autocomplete">
+              <MoldAutocomplete
+                label="Mold*"
                 id="mold"
-                type="text"
-                required
                 value={mold}
-                onChange={(e) => setMold(e.target.value)}
+                onChange={setMold}
+                list={moldsForBrand} // brand-dependent
+                includeOther={false} // edit page: no “Other”
                 placeholder="Destroyer, Buzzz, Hex…"
-                autoComplete="off"
+                required
               />
             </div>
             {/* Flight Numbers */}

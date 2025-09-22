@@ -9,7 +9,8 @@ import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { getBlurDataURL } from "@/lib/blurClient";
 import GlobalStyles from "@/components/GlobalStyles";
 import PlaceholderDisc from "@/components/PlaceholderDisc";
-import { BRANDS, FEATURED_COUNT } from "@/data/brands";
+import { BRANDS, FEATURED_COUNT, getMoldsForBrand } from "@/data/brands-molds";
+import MoldAutocomplete from "@/components/MoldAutocomplete";
 import { useToast } from "@/components/ToastProvider";
 import BrandAutocomplete from "@/components/BrandAutocomplete";
 
@@ -165,6 +166,7 @@ export default function Home() {
   // --- Brand autocomplete state & logic (INSIDE Home) ---
 
   const [mold, setMold] = useState("");
+  const moldsForBrand = useMemo(() => getMoldsForBrand(brand), [brand]);
   const [minCondition, setMinCondition] = useState("");
   const [maxCondition, setMaxCondition] = useState("");
   const [minPrice, setMinPrice] = useState("");
@@ -237,6 +239,12 @@ export default function Home() {
       // user canceled share — no-op
     }
   }
+
+  useEffect(() => {
+    if (!brand || !mold) return;
+    const ok = new Set(moldsForBrand.map((m) => m.toLowerCase()));
+    if (!ok.has(mold.toLowerCase())) setMold("");
+  }, [brand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch seller display name for tag
   useEffect(() => {
@@ -770,18 +778,15 @@ export default function Home() {
                   includeOther={true} // search mode => include “Other”
                 />
 
-                <div className="pp-field">
-                  <label htmlFor="mold">Mold</label>
-                  <input
-                    id="mold"
-                    className="pp-input"
-                    type="text"
-                    value={mold}
-                    onChange={(e) => setMold(e.target.value)}
-                    placeholder="Destroyer, Buzzz, Hex…"
-                    autoComplete="off"
-                  />
-                </div>
+                <MoldAutocomplete
+                  label="Mold"
+                  id="mold"
+                  value={mold}
+                  onChange={setMold}
+                  list={moldsForBrand} // molds depend on selected brand
+                  includeOther={false} // no “Other” in search UI
+                  placeholder="Destroyer, Buzzz, Hex…"
+                />
 
                 {/* Disc Type chips */}
                 <div className="pp-field">

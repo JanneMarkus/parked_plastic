@@ -1,52 +1,43 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
- * BrandAutocomplete — drop-in, controlled autocomplete for brand text.
+ * MoldAutocomplete — controlled autocomplete for mold text.
  *
  * Props:
- *  - label?: string (default: "Brand")
+ *  - label?: string (default: "Mold")
  *  - value: string
  *  - onChange: (next: string) => void
- *  - list: string[]              // full brands list (featured first)
- *  - featuredCount: number       // how many from the top are "featured"
- *  - includeOther?: boolean      // adds trailing "Other" suggestion in menu (search mode)
- *  - className?: string          // extra classes on the root
+ *  - list: string[]              // molds for the current brand
+ *  - includeOther?: boolean      // default false
+ *  - className?: string
  *  - placeholder?: string
- *  - id?: string                 // input id (for label htmlFor)
- *
- * Behavior:
- *  - Free text allowed; suggestions are hints only
- *  - Keyboard: ArrowUp/Down, Enter, Escape
- *  - When input is empty and focused, shows featured (and "Other" if enabled)
+ *  - id?: string
  */
-export default function BrandAutocomplete({
-  label = "Brand",
+export default function MoldAutocomplete({
+  label = "Mold",
   value,
   onChange,
   list,
-  featuredCount,
   includeOther = false,
   className = "",
-  placeholder = "Innova, Discraft, MVP…",
-  id = "brand",
+  placeholder = "Destroyer, Buzzz, Hex…",
+  id = "mold",
   required = false,
 }) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const blurTimer = useRef(null);
-  const rootRef = useRef(null);
   const listRef = useRef(null);
 
-  const featured = useMemo(() => list.slice(0, featuredCount), [list, featuredCount]);
-  const suggestions = useMemo(() => computeSuggestions(value, list, featuredCount, includeOther), [value, list, featuredCount, includeOther]);
+  const suggestions = useMemo(
+    () => computeMoldSuggestions(value, list, includeOther),
+    [value, list, includeOther]
+  );
 
-  // open when focusing the input
   const onFocus = () => setOpen(true);
   const onBlur = () => {
-    // Delay closing so clicks can register
     blurTimer.current = setTimeout(() => setOpen(false), 80);
   };
-
   useEffect(() => () => clearTimeout(blurTimer.current), []);
 
   function onInput(e) {
@@ -54,9 +45,7 @@ export default function BrandAutocomplete({
     setOpen(true);
     setHighlight(-1);
   }
-
   function choose(name) {
-    // Free text is allowed, but choosing sets the input to the clicked option
     onChange(name);
     setOpen(false);
     setHighlight(-1);
@@ -68,7 +57,6 @@ export default function BrandAutocomplete({
       return;
     }
     if (!open) return;
-
     const n = suggestions.length;
     if (n === 0) return;
 
@@ -78,18 +66,6 @@ export default function BrandAutocomplete({
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlight((i) => (i <= 0 ? n - 1 : i - 1));
-    } else if (e.key === "Home") {
-      e.preventDefault();
-      setHighlight(0);
-    } else if (e.key === "End") {
-      e.preventDefault();
-      setHighlight(n - 1);
-    } else if (e.key === "PageDown") {
-      e.preventDefault();
-      setHighlight((i) => Math.min(i + 5, n - 1));
-    } else if (e.key === "PageUp") {
-      e.preventDefault();
-      setHighlight((i) => Math.max(i - 5, 0));
     } else if (e.key === "Enter") {
       if (highlight >= 0 && highlight < n) {
         e.preventDefault();
@@ -101,63 +77,57 @@ export default function BrandAutocomplete({
     }
   }
 
-  // Keep the highlighted suggestion visible as the user arrows up/down
   useEffect(() => {
     if (!open) return;
     const ul = listRef.current;
     if (!ul) return;
     const el = ul.querySelector(`[data-idx="${highlight}"]`);
-    if (el && typeof el.scrollIntoView === "function") {
-      el.scrollIntoView({ block: "nearest" });
-    }
+    if (el) el.scrollIntoView({ block: "nearest" });
   }, [highlight, open]);
 
   return (
-    <div ref={rootRef} className={`pp-field pp-autocomplete ${open ? "is-open" : ""} ${className || ""}`.trim()}>
+    <div className={`pp-field pp-autocomplete ${open ? "is-open" : ""} ${className}`}>
       <label htmlFor={id}>{label}</label>
       <input
         id={id}
         className="pp-input"
-        required={required}
         type="text"
+        required={required}
         value={value}
         onChange={onInput}
         onFocus={onFocus}
         onBlur={onBlur}
         onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        autoComplete="off"
         aria-autocomplete="list"
         aria-expanded={open ? "true" : "false"}
         aria-controls={`${id}-listbox`}
-        placeholder={placeholder}
-        autoComplete="off"
       />
-
       {open && suggestions.length > 0 && (
         <ul
           id={`${id}-listbox`}
           role="listbox"
           className="pp-suggest"
-          aria-label="Brand suggestions"
           ref={listRef}
         >
-          {suggestions.map((name, i) => (
+          {suggestions.map((m, i) => (
             <li
-              key={`${name}-${i}`}
+              key={`${m}-${i}`}
+              data-idx={i}
               role="option"
               aria-selected={i === highlight}
               className={`pp-suggest-item ${i === highlight ? "is-active" : ""}`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => choose(name)}
+              onClick={() => choose(m)}
               onMouseEnter={() => setHighlight(i)}
-              data-idx={i}
             >
-              <span>{name}</span>
+              {m}
             </li>
           ))}
         </ul>
       )}
-
-      {/* Local styles so this component looks identical wherever it's used */}
+    {/* Local styles so this component looks identical wherever it's used */}
       <style jsx>{`
         .pp-autocomplete { position: relative; }
         .pp-suggest {
@@ -191,29 +161,19 @@ export default function BrandAutocomplete({
         
       `}</style>
     </div>
+
   );
 }
 
-/** Suggestion logic matching your existing behavior. */
-function computeSuggestions(input, list, featuredCount, includeOther) {
+function computeMoldSuggestions(input, list, includeOther) {
   const q = (input || "").trim().toLowerCase();
-  const featured = list.slice(0, featuredCount);
+  if (!q) return includeOther ? [...list, "Other"] : [...list];
 
-  if (!q) {
-    const base = [...featured];
-    return includeOther ? [...base, "Other"] : base;
-  }
+  const starts = list.filter((m) => m.toLowerCase().startsWith(q));
+  const contains = list.filter(
+    (m) => !starts.includes(m) && m.toLowerCase().includes(q)
+  );
 
-  const starts = list.filter((b) => b.toLowerCase().startsWith(q));
-  const contains = list.filter((b) => !starts.includes(b) && b.toLowerCase().includes(q));
-
-  const topStarts = starts.filter((b) => featured.includes(b));
-  const restStarts = starts.filter((b) => !featured.includes(b));
-  const topContains = contains.filter((b) => featured.includes(b));
-  const restContains = contains.filter((b) => !featured.includes(b));
-
-  const uniq = (arr) => Array.from(new Set(arr));
-  const results = uniq([...topStarts, ...restStarts, ...topContains, ...restContains]).slice(0, 12);
-
+  const results = [...starts, ...contains].slice(0, 12);
   return includeOther ? [...results, "Other"] : results;
 }
