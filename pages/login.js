@@ -149,7 +149,7 @@ export default function Login({ initialRedirect = "/" }) {
         },
       });
       if (error) throw error;
-      setInfoMsg("Confirmation email re-sent. Check your inbox.");
+      setInfoMsg("Confirmation email re-sent. Check your inbox and/or spam folder.");
       setCanResendConfirm(false);
     } catch (e) {
       const raw = String(e?.message || "");
@@ -239,7 +239,7 @@ export default function Login({ initialRedirect = "/" }) {
         if (error) throw error;
 
         setInfoMsg(
-          "If that email exists, a password reset link has been sent."
+          "If that email exists, a password reset link has been sent. Be sure to check your spam folder."
         );
         setMode("signin");
         return;
