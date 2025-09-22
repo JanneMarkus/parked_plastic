@@ -9,8 +9,9 @@ import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { getBlurDataURL } from "@/lib/blurClient";
 import GlobalStyles from "@/components/GlobalStyles";
 import PlaceholderDisc from "@/components/PlaceholderDisc";
-import { BRANDS, FEATURED, computeBrandSuggestions } from "@/data/brands";
+import { BRANDS, FEATURED_COUNT } from "@/data/brands";
 import { useToast } from "@/components/ToastProvider";
+import BrandAutocomplete from "@/components/BrandAutocomplete";
 
 const supabase = getSupabaseBrowser();
 
@@ -162,51 +163,6 @@ export default function Home() {
   const [seller, setSeller] = useState(""); // profiles.id from ?seller=
   const [brand, setBrand] = useState("");
   // --- Brand autocomplete state & logic (INSIDE Home) ---
-  const [brandOpen, setBrandOpen] = useState(false);
-  const [brandHighlight, setBrandHighlight] = useState(-1); // keyboard focus index
-
-  const brandSuggestions = useMemo(
-    () => computeBrandSuggestions(brand),
-    [brand]
-  );
-
-  const onBrandFocus = () => setBrandOpen(true);
-  const onBrandBlur = () => {
-    // close after a tick so click can register
-    setTimeout(() => setBrandOpen(false), 80);
-  };
-  const chooseBrand = (name) => {
-    if (name === "Other") {
-      setBrand("Other");
-    } else {
-      setBrand(name);
-    }
-    setBrandOpen(false);
-    setBrandHighlight(-1);
-  };
-  const onBrandKeyDown = (e) => {
-    if (!brandOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-      setBrandOpen(true);
-      return;
-    }
-    if (!brandOpen) return;
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setBrandHighlight((i) => Math.min(i + 1, brandSuggestions.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setBrandHighlight((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter") {
-      if (brandHighlight >= 0 && brandHighlight < brandSuggestions.length) {
-        e.preventDefault();
-        chooseBrand(brandSuggestions[brandHighlight]);
-      }
-    } else if (e.key === "Escape") {
-      setBrandOpen(false);
-      setBrandHighlight(-1);
-    }
-  };
 
   const [mold, setMold] = useState("");
   const [minCondition, setMinCondition] = useState("");
@@ -804,52 +760,15 @@ export default function Home() {
             {/* Collapsible filter grid */}
             {showFilters && (
               <div id="filter-grid" className="grid">
-                <div className="pp-field pp-autocomplete">
-                  <label htmlFor="brand">Brand</label>
-                  <input
-                    id="brand"
-                    className="pp-input"
-                    type="text"
-                    value={brand}
-                    onChange={(e) => {
-                      setBrand(e.target.value);
-                      setBrandOpen(true);
-                    }}
-                    onFocus={onBrandFocus}
-                    onBlur={onBrandBlur}
-                    onKeyDown={onBrandKeyDown}
-                    aria-autocomplete="list"
-                    aria-expanded={brandOpen ? "true" : "false"}
-                    aria-controls="brand-listbox"
-                    placeholder="Innova, Discraft, MVP…"
-                    autoComplete="off"
-                  />
-                  {brandOpen && brandSuggestions.length > 0 && (
-                    <ul
-                      id="brand-listbox"
-                      role="listbox"
-                      className="pp-suggest"
-                      aria-label="Brand suggestions"
-                    >
-                      {brandSuggestions.map((name, i) => (
-                        <li
-                          key={name}
-                          role="option"
-                          aria-selected={i === brandHighlight}
-                          className={`pp-suggest-item ${
-                            i === brandHighlight ? "is-active" : ""
-                          }`}
-                          onMouseDown={(e) => e.preventDefault()} // keep focus
-                          onClick={() => chooseBrand(name)}
-                          onMouseEnter={() => setBrandHighlight(i)}
-                        >
-                          {name}
-                          {FEATURED.includes(name)}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                <BrandAutocomplete
+                  label="Brand"
+                  id="brand"
+                  value={brand}
+                  onChange={setBrand}
+                  list={BRANDS}
+                  featuredCount={FEATURED_COUNT}
+                  includeOther={true} // search mode => include “Other”
+                />
 
                 <div className="pp-field">
                   <label htmlFor="mold">Mold</label>
