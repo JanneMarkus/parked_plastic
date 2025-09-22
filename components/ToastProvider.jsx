@@ -1,5 +1,5 @@
 // components/ToastProvider.jsx
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, useEffect } from "react";
 
 const ToastCtx = createContext(null);
 
@@ -12,6 +12,30 @@ function mkId() {
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const timers = useRef(new Map());
+  const containerRef = useRef(null);
+
+   // Expose total toast stack height so other UI (like FAB) can avoid overlapping it.
+   useEffect(() => {
+     if (typeof window === "undefined") return;
+     const el = containerRef.current;
+     if (!el) return;
+     const setVar = () => {
+       const h = el.getBoundingClientRect().height || 0;
+       // add a little breathing room between toasts and FAB
+       document.documentElement.style.setProperty(
+         "--toast-stack-height",
+         h > 0 ? `${h + 12}px` : "0px"
+       );
+     };
+     const ro = new ResizeObserver(setVar);
+     ro.observe(el);
+     setVar(); // initial
+     window.addEventListener("resize", setVar);
+     return () => {
+       ro.disconnect();
+       window.removeEventListener("resize", setVar);
+     };
+   }, [toasts.length]);
 
   const remove = useCallback((id) => {
     setToasts((arr) => arr.filter((t) => t.id !== id));
@@ -51,7 +75,13 @@ export function ToastProvider({ children }) {
     <ToastCtx.Provider value={api}>
       {children}
       {/* Live region for screen readers */}
-      <div aria-live="polite" aria-atomic="true" className="pp-toasts" role="status">
+      <div
+        ref={containerRef}
+        aria-live="polite"
+        aria-atomic="true"
+        className="pp-toasts"
+        role="status"
+      >
         {toasts.map((t) => (
           <div key={t.id} className={`pp-toast ${t.variant}`}>
             <div className="msg">{t.message}</div>
@@ -78,7 +108,7 @@ export function ToastProvider({ children }) {
         .pp-toasts {
           position: fixed;
           z-index: 1000;
-          bottom: 20px;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
           left: 50%;
           transform: translateX(-50%);
           display: flex;

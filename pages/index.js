@@ -1397,87 +1397,96 @@ export default function Home() {
 
         /* Floating action button: Jump to results (on-brand) */
 .pp-fab {
-          position: fixed;
-          right: 14px;
-          bottom: 14px;
-          z-index: 1001;
-          border: none;
-          background: var(--teal, #279989); /* brand teal */
-          color: #fff;
-          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18),
-            0 2px 0 rgba(0, 0, 0, 0.02) inset;
-          border-radius: 999px;
-          padding: 12px 18px 12px 44px; /* extra left for icon */
-          font-weight: 800;
-          font-size: 14px;
-          letter-spacing: 0.2px;
-          cursor: pointer;
-          /* animation base (hidden state) */
-          opacity: 0;
-          transform: translateY(12px);
-          pointer-events: none;
-          transition: opacity 160ms ease, transform 160ms ease;
-         }
-        .pp-fab.is-visible {
-          opacity: 1;
-          transform: translateY(0);
-          pointer-events: auto;
-        }
-        .pp-fab::before {
-          content: "";
-          position: absolute;
-          left: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 22px;
-          height: 22px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.18);
-          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
-        }
-        .pp-fab::after {
-          /* Down chevron using currentColor (white) */
-          content: "";
-          position: absolute;
-          left: 18px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 10px;
-          height: 10px;
-          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
-          background-repeat: no-repeat;
-          background-position: center;
-        }
-        .pp-fab:hover {
-          background: var(--teal-dark, #1e7a6f);
-          transform: translateY(-1px);
-          box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22),
-            0 2px 0 rgba(0, 0, 0, 0.04) inset;
-        }
-        .pp-fab:active {
-          transform: translateY(0);
-          box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18),
-            0 1px 0 rgba(0, 0, 0, 0.04) inset;
-        }
-        .pp-fab:focus-visible {
-          outline: none;
-          box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--teal, #279989),
-            0 10px 24px rgba(0, 0, 0, 0.18);
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .pp-fab {
-            transition: none;
-          }
-        }
-        @media (prefers-color-scheme: dark) {
-          .pp-fab {
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.36),
-              0 2px 0 rgba(255, 255, 255, 0.03) inset;
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .pp-fab { transition: none; }
-        }
+  position: fixed;
+  left: 50%;
+  /* Hidden/base state: centered X, offset 12px down for slide-in */
+  transform: translate(-50%, 12px);
+  /* Lift the FAB above any visible toasts + safe area */
+  bottom: calc(14px + var(--toast-stack-height, 0px) + env(safe-area-inset-bottom, 0px));
+  z-index: 1001;
+
+  border: none;
+  background: var(--teal, #279989); /* brand teal */
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18), 0 2px 0 rgba(0, 0, 0, 0.02) inset;
+  border-radius: 999px;
+  padding: 12px 18px 12px 44px; /* extra left for icon */
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+
+  opacity: 0;
+  pointer-events: none;
+
+  /* One transition list; avoid duplicate transform declarations elsewhere */
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.pp-fab.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0); /* centered and visible */
+  pointer-events: auto;
+}
+
+.pp-fab::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+}
+
+.pp-fab::after {
+  /* Down chevron using currentColor (white) */
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.pp-fab:hover {
+  background: var(--teal-dark, #1e7a6f);
+  transform: translate(-50%, -1px); /* slight lift while staying centered */
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22), 0 2px 0 rgba(0, 0, 0, 0.04) inset;
+}
+
+.pp-fab:active {
+  transform: translate(-50%, 0); /* settle back on press */
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18), 0 1px 0 rgba(0, 0, 0, 0.04) inset;
+}
+
+.pp-fab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--teal, #279989), 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-fab {
+    transition: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .pp-fab {
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.36), 0 2px 0 rgba(255, 255, 255, 0.03) inset;
+  }
+}
 
         /* Ensure anchored scrolls don't hide under the header */
         #results {
