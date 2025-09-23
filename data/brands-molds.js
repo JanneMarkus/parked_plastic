@@ -5,37 +5,86 @@ export const FEATURED_COUNT = 30;
 
 // Ordered entries: brand -> popular molds
 export const BRAND_ENTRIES = [
-  ["Axiom", ["Hex","Envy", "Proxy", "Crave", "Insanity", "Fireball", "Defy", "Tempo", "Mayhem"]],
-  ["Discmania", ["PD", "FD", "DD3", "P2", "MD3", "Essence", "Instinct", "Origin", "Tilt"]],
-  ["Discraft", ["Buzzz", "Zone", "Force", "Undertaker", "Nuke", "Luna", "Challenger", "Crank", "Comet", "Heat"]],
-  ["Dynamic Discs", ["Judge", "EMAC Truth", "Trespass", "Felon", "Escape", "Warden", "Raider", "Maverick", "Vandal"]],
-  ["Gateway", ["Wizard", "Warlock", "Magic", "Chief", "Apache"]],
-  ["Infinite Discs", ["Emperor", "Pharaoh", "Sphinx", "Tomb", "Aztec", "Centurion", "Dynasty", "Exodus", "Rift"]],
-  ["Innova", ["Destroyer", "Wraith", "Teebird", "Firebird", "Aviar", "Mako3", "Roc3", "Leopard3", "Tern", "Thunderbird"]],
-  ["Kastaplast", ["Berg", "Reko", "Lots", "Stal", "Grym", "Gote", "Kaxe", "Krut", "Falk", "Jarn"]],
-  ["Latitude 64", ["Pure", "Diamond", "River", "Saint", "Grace", "Ballista Pro", "Fuse", "Pioneer", "Explorer"]],
-  ["MVP", ["Trail", "Wave", "Volt", "Tesla", "Reactor", "Nomad", "Catalyst", "Photon", "Relay", "Inertia"]],
-  ["Prodigy", ["PA-3", "M4", "F5", "D3", "H3", "A2", "FX-2", "D2", "PX-3", "M3"]],
-  ["Streamline", ["Pilot", "Drift", "Trace", "Lift", "Runway"]],
-  ["Westside Discs", ["Harp", "Warship", "Sword", "Queen", "Stag", "Hatchet", "Pine", "Anvil"]],
-  // The rest — add as you go. Empty arrays are fine; suggestions still allow free text.
-  ["DGA", []],
-  ["Clash Discs", []],
-  ["Thought Space Athletics", []],
-  ["Lone Star Discs", []],
-  ["Mint Discs", []],
-  ["RPM Discs", []],
-  ["Prodiscus", []],
-  ["Divergent Discs", []],
-  ["Disc Golf UK", []],
-  ["Loft Discs", []],
-  ["Viking Discs", []],
-  ["Birdie", []],
-  ["Doomsday Discs", []],
-  ["Doombird", []],
-  ["Millennium", []],
-  ["Alpha Discs", []],
-  ["EV-7", []],
+  ["Axiom", [
+    "Envy", "Proxy", "Hex", "Crave", "Insanity", "Fireball", "Defy", "Tempo", "Mayhem",
+    "Paradox", "Insanity", "Virus", "Delirium", "Excite", "Pyro", "Crave", "Insanity",
+    "Inspire", "Tantrum", "Panic", "Insanity", "Thrill"
+  ]],
+  ["Discmania", [
+    "P1", "P2", "P3x", "MD1", "MD2", "MD3", "MD4", "FD", "FD2", "FD3",
+    "CD2", "CD3", "PD", "PD2", "PD3", "DD", "DD2", "DD3", "TD", "TD2",
+    "Essence", "Instinct", "Origin", "Method", "Mutant", "Tilt"
+  ]],
+  ["Discraft", [
+    "Buzzz", "Buzzz OS", "Buzzz SS", "Zone", "Zone OS", "Zone SS", "Force", "Undertaker", "Nuke", "Nuke OS",
+    "Nuke SS", "Luna", "Challenger", "Challenger SS", "Crank", "Comet", "Heat", "Vulture",
+    "Scorch", "Thrasher", "Avenger SS", "Roach", "Meteor", "Raptor"
+  ]],
+  ["Dynamic Discs", [
+    "Judge", "Classic Judge", "Prime Judge", "Truth", "Verdict", "Emac Judge",
+    "Trespass", "Felon", "Escape", "Warden", "Raider", "Maverick", "Vandal",
+    "Sheriff", "Getaway", "Convict", "Defender", "Freedom", "Slammer", "Deputy",
+    "Suspect"
+  ]],
+  ["Gateway", [
+    "Wizard", "Warlock", "Magic", "Chief", "Voodoo",
+    "Shaman", "Mystic", "Apache", "Element", "Diablo"
+  ]],
+  ["Infinite Discs", [
+    "Emperor", "Pharaoh", "Sphinx", "Tomb", "Aztec",
+    "Centurion", "Dynasty", "Exodus", "Rift", "Slab",
+    "Anubis", "Chariot", "Ruins", "Roman", "I-Blend Scepter"
+  ]],
+  ["Innova", [
+    "Destroyer", "Wraith", "Teebird", "Teebird3", "Firebird", "Aviar", "Aviar3",
+    "Mako3", "Roc", "Roc3", "RocX3", "Leopard", "Leopard3", "Tern",
+    "Thunderbird", "Shryke", "Boss", "Katana", "Colossus", "Valkyrie",
+    "Eagle", "Orc", "Sidewinder", "Cheetah", "Panther", "Rhyno"
+  ]],
+  ["Kastaplast", [
+    "Berg", "Reko", "Reko X", "Lots", "Stal", "Grym", "Grym X",
+    "Gote", "Kaxe", "Kaxe Z", "Krut", "Falk", "Jarn", "Svea",
+    "Sarek", "Rask", "Stig", "Vass"
+  ]],
+  ["Latitude 64", [
+    "Pure", "Diamond", "River", "River Pro", "Saint", "Saint Pro",
+    "Grace", "Ballista", "Ballista Pro", "Fuse", "Pioneer", "Explorer",
+    "Bolt", "Flow", "Striker", "Trident", "Culverin", "XXX", "Havoc", "Vision"
+  ]],
+  ["MVP", [
+    "Wave", "Volt", "Tesla", "Reactor", "Nomad", "Catalyst", "Photon",
+    "Relay", "Inertia", "Amp", "Signal", "Impulse", "Octane", "Energy",
+    "Motion", "Terra", "Resistor", "Axis", "Vector", "Matrix"
+  ]],
+  ["Prodigy", [
+    "PA-1", "PA-2", "PA-3", "PA-4", "M1", "M2", "M3", "M4",
+    "F1", "F2", "F3", "F5", "D1", "D2", "D3", "D4",
+    "H1", "H2", "H3", "H4", "A1", "A2", "A3", "A4",
+    "FX-2", "X3"
+  ]],
+  ["Streamline", [
+    "Pilot", "Drift", "Trace", "Lift", "Runway"
+  ]],
+  ["Westside Discs", [
+    "Harp", "Warship", "Sword", "Queen", "King", "Stag",
+    "Hatchet", "Pine", "Anvil", "Swan", "Swan 2", "Maiden"
+  ]],
+  ["DGA", ["Breakout", "Pipeline", "Sail", "Hurricane", "Squall"]],
+  ["Clash Discs", ["Mint", "Peppermint", "Berry", "Popcorn", "Mango"]],
+  ["Thought Space Athletics", ["Mantra", "Synapse", "Coalesce", "Construct", "Pathfinder"]],
+  ["Lone Star Discs", ["Penny Putter", "Armadillo", "Mockingbird", "Tombstone", "Harpoon"]],
+  ["Mint Discs", ["Alpha", "Freetail", "Bullet", "Jackalope", "Mustang"]],
+  ["RPM Discs", ["Piwakawaka", "Kea", "Ruru", "Taniwha", "Kotare"]],
+  ["Prodiscus", ["Titan", "Midari", "Respecti", "Legenda", "Jokeri"]],
+  ["Divergent Discs", ["Nuno", "Kraken", "Leviathan", "Lawin", "Kapre"]],
+  ["Disc Golf UK", ["Barbarian", "Merlin", "Leprechaun", "Grizzly", "Bulldog"]],
+  ["Loft Discs", ["Bohrium", "Silicon", "Hydrogen", "Xenon", "Helium"]],
+  ["Viking Discs", ["Fenrir", "Rune", "Axe", "Berserker", "Nordic Warrior"]],
+  ["Birdie", ["Marvel", "Raven", "Strike", "Reach", "Falcon"]],
+  ["Doomsday Discs", ["Plague", "Cataclysm", "Despair", "Bleak", "Wrath"]],
+  ["Millennium", ["JLS", "OLS", "Sirius", "Astra", "Polaris LS"]],
+  ["Alpha Discs", ["Spoiler", "Blackout", "Vanish", "Flux", "Twilight"]],
+  ["EV-7", ["Penrose", "Phi", "OG Base", "Telos", "iON"]],
 ];
 
 // Derived structures/utilities (no duplication)
