@@ -36,6 +36,7 @@ export default function BrandAutocomplete({
   const [highlight, setHighlight] = useState(-1);
   const blurTimer = useRef(null);
   const rootRef = useRef(null);
+  const inputRef = useRef(null);
   const listRef = useRef(null);
 
   const featured = useMemo(() => list.slice(0, featuredCount), [list, featuredCount]);
@@ -49,6 +50,20 @@ export default function BrandAutocomplete({
   };
 
   useEffect(() => () => clearTimeout(blurTimer.current), []);
+
+  // Close when clicking outside (in case menu is open while input isn't focused)
+  useEffect(() => {
+    function onDocPointerDown(e) {
+      if (!open) return;
+      const root = rootRef.current;
+      if (root && !root.contains(e.target)) {
+        setOpen(false);
+        setHighlight(-1);
+      }
+    }
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => document.removeEventListener("pointerdown", onDocPointerDown);
+  }, [open]);
 
   function onInput(e) {
     onChange(e.target.value);
@@ -120,6 +135,7 @@ export default function BrandAutocomplete({
       <label htmlFor={id}>{label}</label>
       <div className="pp-input-wrap">
         <input
+          ref={inputRef}
           id={id}
           className="pp-input"
           required={required}
@@ -143,8 +159,13 @@ export default function BrandAutocomplete({
             aria-label={`Clear ${label}`}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
+              // Keep focus on the input so outside clicks will trigger onBlur
               onChange("");
+              // Clear any pending blur-close to avoid race with setOpen
+              if (blurTimer.current) clearTimeout(blurTimer.current);
+              inputRef.current?.focus();
               setOpen(true);
+              setHighlight(-1);
             }}
           >
             ×

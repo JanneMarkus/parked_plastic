@@ -28,6 +28,8 @@ export default function MoldAutocomplete({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const blurTimer = useRef(null);
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
   const listRef = useRef(null);
 
   const suggestions = useMemo(
@@ -40,6 +42,20 @@ export default function MoldAutocomplete({
     blurTimer.current = setTimeout(() => setOpen(false), 80);
   };
   useEffect(() => () => clearTimeout(blurTimer.current), []);
+
+  // Close when clicking outside (if menu is open but input isn't focused)
+  useEffect(() => {
+    function onDocPointerDown(e) {
+      if (!open) return;
+      const root = rootRef.current;
+      if (root && !root.contains(e.target)) {
+        setOpen(false);
+        setHighlight(-1);
+      }
+    }
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => document.removeEventListener("pointerdown", onDocPointerDown);
+  }, [open]);
 
   function onInput(e) {
     onChange(e.target.value);
@@ -89,10 +105,14 @@ export default function MoldAutocomplete({
   const showClear = clearable && (value ?? "").trim().length > 0;
 
   return (
-    <div className={`pp-field pp-autocomplete ${open ? "is-open" : ""} ${className}`}>
+    <div
+      ref={rootRef}
+      className={`pp-field pp-autocomplete ${open ? "is-open" : ""} ${className}`}
+    >
       <label htmlFor={id}>{label}</label>
       <div className="pp-input-wrap">
         <input
+          ref={inputRef}
           id={id}
           className="pp-input"
           type="text"
@@ -117,7 +137,10 @@ export default function MoldAutocomplete({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               onChange("");
+              if (blurTimer.current) clearTimeout(blurTimer.current);
+              inputRef.current?.focus(); // keep focus so onBlur works later
               setOpen(true);
+              setHighlight(-1);
             }}
           >
             ×
