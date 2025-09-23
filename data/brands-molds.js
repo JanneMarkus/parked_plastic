@@ -1,14 +1,8 @@
-// data/brands-molds.js
-
-// How many from the top are “featured”
-export const FEATURED_COUNT = 30;
-
-// Ordered entries: brand -> popular molds
 export const BRAND_ENTRIES = [
   ["Axiom", [
     "Envy", "Proxy", "Hex", "Crave", "Insanity", "Fireball", "Defy", "Tempo", "Mayhem",
-    "Paradox", "Insanity", "Virus", "Delirium", "Excite", "Pyro", "Crave", "Insanity",
-    "Inspire", "Tantrum", "Panic", "Insanity", "Thrill"
+    "Paradox", "Virus", "Delirium", "Excite", "Pyro", "Inspire", "Tantrum", "Panic",
+    "Thrill", "Insanity", "Crave"
   ]],
   ["Discmania", [
     "P1", "P2", "P3x", "MD1", "MD2", "MD3", "MD4", "FD", "FD2", "FD3",
@@ -16,7 +10,7 @@ export const BRAND_ENTRIES = [
     "Essence", "Instinct", "Origin", "Method", "Mutant", "Tilt"
   ]],
   ["Discraft", [
-    "Buzzz", "Buzzz OS", "Buzzz SS", "Zone", "Zone OS", "Zone SS", "Force", "Undertaker", "Nuke", "Nuke OS",
+    "Buzzz", "Buzzz OS", "Buzzz SS", "Zone", "Zone OS", "Force", "Undertaker", "Nuke", "Nuke OS",
     "Nuke SS", "Luna", "Challenger", "Challenger SS", "Crank", "Comet", "Heat", "Vulture",
     "Scorch", "Thrasher", "Avenger SS", "Roach", "Meteor", "Raptor"
   ]],
@@ -33,7 +27,7 @@ export const BRAND_ENTRIES = [
   ["Infinite Discs", [
     "Emperor", "Pharaoh", "Sphinx", "Tomb", "Aztec",
     "Centurion", "Dynasty", "Exodus", "Rift", "Slab",
-    "Anubis", "Chariot", "Ruins", "Roman", "I-Blend Scepter"
+    "Anubis", "Chariot", "Ruins", "Roman", "Scepter"
   ]],
   ["Innova", [
     "Destroyer", "Wraith", "Teebird", "Teebird3", "Firebird", "Aviar", "Aviar3",
@@ -84,46 +78,5 @@ export const BRAND_ENTRIES = [
   ["Doomsday Discs", ["Plague", "Cataclysm", "Despair", "Bleak", "Wrath"]],
   ["Millennium", ["JLS", "OLS", "Sirius", "Astra", "Polaris LS"]],
   ["Alpha Discs", ["Spoiler", "Blackout", "Vanish", "Flux", "Twilight"]],
-  ["EV-7", ["Penrose", "Phi", "OG Base", "Telos", "iON"]],
+  ["EV-7", ["Penrose", "Phi", "Telos", "iON", "OG Base"]],
 ];
-
-// Derived structures/utilities (no duplication)
-export const BRANDS_MAP = Object.fromEntries(BRAND_ENTRIES);
-export const BRANDS = BRAND_ENTRIES.map(([brand]) => brand);
-export const FEATURED = BRANDS.slice(0, FEATURED_COUNT);
-
-export function getMoldsForBrand(brand) {
-  return BRANDS_MAP[brand] || [];
-}
-
-// Same suggestion logic, now using BRANDS derived from the single source
-export function computeBrandSuggestions(
-  input,
-  list = BRANDS,
-  featuredCount = FEATURED_COUNT,
-  includeOther = true,
-) {
-  const q = (input || "").trim().toLowerCase();
-  const featured = list.slice(0, featuredCount);
-  if (!q) return [...featured, "Other"];
-
-  const starts = list.filter((b) => b.toLowerCase().startsWith(q));
-  const contains = list.filter(
-    (b) => !starts.includes(b) && b.toLowerCase().includes(q)
-  );
-
-  const topStarts = starts.filter((b) => featured.includes(b));
-  const restStarts = starts.filter((b) => !featured.includes(b));
-  const topContains = contains.filter((b) => featured.includes(b));
-  const restContains = contains.filter((b) => !featured.includes(b));
-
-  const uniq = (arr) => Array.from(new Set(arr));
-  const results = uniq([
-    ...topStarts,
-    ...restStarts,
-    ...topContains,
-    ...restContains,
-  ]).slice(0, 12);
-
-  return includeOther ? [...results, "Other"]: results;
-}
