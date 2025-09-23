@@ -69,9 +69,13 @@ export default function CreateListing({ user }) {
       setMold("");
       return;
     }
-    const ok = new Set(moldsForBrand.map((m) => m.toLowerCase()));
-    if (mold && !ok.has(mold.toLowerCase())) setMold("");
-  }, [brand, moldsForBrand, mold]); // keep mold valid for the chosen brand
+    const allowed = new Set(
+      getMoldsForBrand(brand).map((m) => m.toLowerCase())
+    );
+    if (mold && !allowed.has(mold.toLowerCase())) {
+      setMold("");
+    }
+  }, [brand]); // ← only when brand changes
   const [plastic, setPlastic] = useState("");
   const [conditionScore, setConditionScore] = useState(""); // 1–10
   const [weight, setWeight] = useState("");

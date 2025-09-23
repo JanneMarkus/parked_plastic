@@ -139,9 +139,14 @@ export default function EditListing({ initialUser, initialDisc }) {
       setMold("");
       return;
     }
-    const ok = new Set(moldsForBrand.map((m) => m.toLowerCase()));
-    if (mold && !ok.has(mold.toLowerCase())) setMold("");
-  }, [brand, moldsForBrand, mold]);
+    // Recompute from brand only, so we don't fight the user's typing
+    const allowed = new Set(
+      getMoldsForBrand(brand).map((m) => m.toLowerCase())
+    );
+    if (mold && !allowed.has(mold.toLowerCase())) {
+      setMold("");
+    }
+  }, [brand]); // ← only run when brand changes
 
   // Seed from SSR (already authenticated & owner-checked)
   useEffect(() => {
