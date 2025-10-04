@@ -8,7 +8,7 @@ export const BRAND_ENTRIES = [
   ["Axiom", [
     "Envy", "Proxy", "Hex", "Crave", "Insanity", "Fireball", "Defy", "Tempo", "Mayhem",
     "Paradox", "Virus", "Delirium", "Excite", "Pyro", "Inspire", "Tantrum", "Panic",
-    "Thrill", "Insanity", "Crave"
+    "Thrill", "Insanity"
   ]],
   ["Discmania", [
     "P1", "P2", "P3x", "MD1", "MD2", "MD3", "MD4", "FD", "FD2", "FD3",
