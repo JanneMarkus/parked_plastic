@@ -1189,7 +1189,8 @@ export default function Home() {
                     )}
 
                   <div className="meta">
-                    {d.brand || "—"}
+                    {d.brand || "-"}
+                    {d.plastic ? ` • ${d.plastic}` : ""}
                     {d.mold ? ` • ${d.mold}` : ""}
                   </div>
 
