@@ -166,6 +166,7 @@ export default function Home() {
   // --- Brand autocomplete state & logic (INSIDE Home) ---
 
   const [mold, setMold] = useState("");
+  const [plastic, setPlastic] = useState("");
   const moldsForBrand = useMemo(() => getMoldsForBrand(brand), [brand]);
   const [minCondition, setMinCondition] = useState("");
   const [maxCondition, setMaxCondition] = useState("");
@@ -203,6 +204,14 @@ export default function Home() {
   const [showJump, setShowJump] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search, 450);
+  const plasticsForSuggest = useMemo(() => {
+    const seen = new Set();
+    for (const d of discs || []) {
+      const p = (d?.plastic || "").trim();
+      if (p) seen.add(p);
+    }
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [discs]);
 
   // --- Strict-Mode safety helpers ---
   // Guards against stale results when multiple fetches overlap
@@ -245,6 +254,7 @@ export default function Home() {
       if (typeof f.seller === "string") setSeller(f.seller);
       if (typeof f.brand === "string") setBrand(f.brand);
       if (typeof f.mold === "string") setMold(f.mold);
+      if (typeof f.plastic === "string") setPlastic(f.plastic);
       if (typeof f.minCondition === "string") setMinCondition(f.minCondition);
       if (typeof f.maxCondition === "string") setMaxCondition(f.maxCondition);
       if (typeof f.minPrice === "string") setMinPrice(f.minPrice);
@@ -301,6 +311,7 @@ export default function Home() {
             seller,
             brand,
             mold,
+            plastic,
             minCondition,
             maxCondition,
             minPrice,
@@ -330,7 +341,7 @@ export default function Home() {
     };
     router.events.on("routeChangeStart", onStart);
     return () => router.events.off("routeChangeStart", onStart);
-  }, [router.events, search, seller, brand, mold, minCondition, maxCondition, minPrice, maxPrice, minWeight, maxWeight, speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax, includePending, onlyGlow, excludeInked, typeDriver, typeFairway, typeMidrange, typePutter]);
+  }, [router.events, search, seller, brand, mold, plastic, minCondition, maxCondition, minPrice, maxPrice, minWeight, maxWeight, speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax, includePending, onlyGlow, excludeInked, typeDriver, typeFairway, typeMidrange, typePutter]);
 
   async function onInviteFriend() {
     const base =
@@ -463,6 +474,9 @@ export default function Home() {
         if (mold.trim()) {
           query = query.ilike("mold", mold.trim());
         }
+        if (plastic.trim()) {
+          query = query.ilike("plastic", plastic.trim());
+        }
 
         const minC = minCondition !== "" ? Number(minCondition) : null;
         const maxC = maxCondition !== "" ? Number(maxCondition) : null;
@@ -552,6 +566,7 @@ export default function Home() {
     seller,
     brand,
     mold,
+    plastic,
     minCondition,
     maxCondition,
     minPrice,
@@ -724,6 +739,7 @@ export default function Home() {
       seller.trim() ? "seller" : "",
       brand.trim(),
       mold.trim(),
+      plastic.trim(),
       minCondition !== "" ? "cMin" : "",
       maxCondition !== "" ? "cMax" : "",
       minPrice !== "" ? "minPrice" : "",
@@ -751,6 +767,7 @@ export default function Home() {
     seller,
     brand,
     mold,
+    plastic,
     minCondition,
     maxCondition,
     minPrice,
@@ -778,6 +795,7 @@ export default function Home() {
     setSeller("");
     setBrand("");
     setMold("");
+    setPlastic("");
     setMinCondition("");
     setMaxCondition("");
     setMinPrice("");
@@ -910,6 +928,17 @@ export default function Home() {
                   list={moldsForBrand} // molds depend on selected brand
                   includeOther={false} // no “Other” in search UI
                   placeholder="Destroyer, Buzzz, Hex…"
+                />
+
+                <BrandAutocomplete
+                  label="Plastic"
+                  id="plastic"
+                  value={plastic}
+                  onChange={setPlastic}
+                  list={plasticsForSuggest}
+                  featuredCount={8}
+                  includeOther={false}
+                  placeholder="Star, Champion, ESP, Z"
                 />
 
                 {/* Disc Type chips */}
