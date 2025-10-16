@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import GlobalStyles from "@/components/GlobalStyles";
 import { Poppins, Source_Sans_3 } from "next/font/google";
 import "@/styles/globals.css";
@@ -100,8 +101,13 @@ export default function MyApp({ Component, pageProps }) {
         >
           <ToastProvider>
             <GlobalStyles />
-            <Header />
-            <Component {...pageProps} />
+            <div className="layout">
+              <Header />
+              <main className="layoutMain">
+                <Component {...pageProps} />
+              </main>
+              <Footer />
+            </div>
             <Analytics />
           </ToastProvider>
         </SessionContextProvider>

@@ -39,6 +39,16 @@ export default function GlobalStyles() {
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
       }
+      /* Sticky footer layout */
+      .layout {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .layoutMain {
+        flex: 1 0 auto;
+        display: block;
+      }
 
       h1,
       h2,
