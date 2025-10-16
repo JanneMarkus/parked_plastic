@@ -208,6 +208,56 @@ export default function Home() {
   // Guards against stale results when multiple fetches overlap
   const requestIdRef = useRef(0);
 
+  // Persist/restore scroll when navigating to a listing and back
+  const restoreScrollRef = useRef(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const lastTo = sessionStorage.getItem("pp:lastTo");
+      const saved = sessionStorage.getItem("pp:index:scroll");
+      if (lastTo === "listing" && saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed.y === "number") {
+          restoreScrollRef.current = parsed.y;
+        }
+      }
+    } catch {}
+    // Clear the marker so a fresh load doesn't mistakenly restore
+    try { sessionStorage.removeItem("pp:lastTo"); } catch {}
+  }, []);
+
+  // After discs load/render, attempt to restore scroll position
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const y = restoreScrollRef.current;
+    if (y == null) return;
+    // Try a few times to account for layout/image hydration
+    const attempts = [0, 50, 250];
+    attempts.forEach((ms) => {
+      setTimeout(() => {
+        try { window.scrollTo(0, y); } catch {}
+      }, ms);
+    });
+    restoreScrollRef.current = null;
+  }, [discs.length]);
+
+  // When leaving index for a listing, save current scroll position
+  useEffect(() => {
+    const onStart = (url) => {
+      if (typeof url === "string" && url.startsWith("/listings")) {
+        try {
+          sessionStorage.setItem(
+            "pp:index:scroll",
+            JSON.stringify({ y: window.scrollY, ts: Date.now() })
+          );
+          sessionStorage.setItem("pp:lastTo", "listing");
+        } catch {}
+      }
+    };
+    router.events.on("routeChangeStart", onStart);
+    return () => router.events.off("routeChangeStart", onStart);
+  }, [router.events]);
+
   async function onInviteFriend() {
     const base =
       typeof window !== "undefined" && window.location?.origin
