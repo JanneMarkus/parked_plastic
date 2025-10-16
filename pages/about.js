@@ -51,7 +51,7 @@ export default function About() {
           <ol>
             <li>
               <strong>Create an account</strong> to manage your listings and
-              messages.
+              messaging preferences.
             </li>
             <li>
               <strong>Post a disc</strong> with photos, price, and details
