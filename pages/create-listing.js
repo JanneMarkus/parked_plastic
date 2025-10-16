@@ -106,13 +106,6 @@ export default function CreateListing({ user }) {
     const n = Number(s);
     return Number.isFinite(n) ? n : NaN;
   }
-  function adjustTurn(delta) {
-    setTurn((prev) => {
-      const cur = prev === "" ? 0 : parseLocaleNumber(prev) || 0;
-      const next = clamp(toHalfStep(cur + delta), -5, 1);
-      return String(next);
-    });
-  }
   function sanitizeTurn() {
     setTurn((prev) => {
       if (prev === "") return prev;
@@ -341,37 +334,19 @@ export default function CreateListing({ user }) {
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Turn</span>
-                  <div className="spin">
-                    <button
-                      type="button"
-                      className="spinBtn"
-                      onClick={() => adjustTurn(-0.5)}
-                      aria-label="Decrease turn by 0.5"
-                    >
-                      −0.5
-                    </button>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min={-5}
-                      max={1}
-                      required
-                      value={turn}
-                      onChange={(e) => setTurn(e.target.value)}
-                      onBlur={sanitizeTurn}
-                      inputMode="decimal"
-                      placeholder="e.g., -1"
-                      list="turnOptions"
-                    />
-                    <button
-                      type="button"
-                      className="spinBtn"
-                      onClick={() => adjustTurn(0.5)}
-                      aria-label="Increase turn by 0.5"
-                    >
-                      +0.5
-                    </button>
-                  </div>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min={-5}
+                    max={1}
+                    required
+                    value={turn}
+                    onChange={(e) => setTurn(e.target.value)}
+                    onBlur={sanitizeTurn}
+                    inputMode="decimal"
+                    placeholder="e.g., -1"
+                    list="turnOptions"
+                  />
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Fade</span>
@@ -588,9 +563,6 @@ const styles = `
   @media (min-width: 768px) { .flightGrid { grid-template-columns: repeat(4, 1fr); } }
   .flightField { display: grid; gap: 6px; }
   .ffLabel { font-weight: 600; color: var(--storm); font-size: .9rem; }
-  .spin { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
-  .spinBtn { border: 1px solid var(--cloud); background: #fff; border-radius: 8px; padding: 8px 10px; font-weight: 700; cursor: pointer; }
-  .spinBtn:active { transform: translateY(1px); }
   .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 4px; }
   .btn { border: none; border-radius: 10px; padding: 12px 16px; font-weight: 700; cursor: pointer; font-size: 14px; }
   .btn-primary { background: var(--teal); color: #fff; }
