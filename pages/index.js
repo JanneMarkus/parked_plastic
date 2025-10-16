@@ -210,6 +210,7 @@ export default function Home() {
 
   // Persist/restore scroll when navigating to a listing and back
   const restoreScrollRef = useRef(null);
+  const restoreFiltersRef = useRef(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -221,9 +222,53 @@ export default function Home() {
           restoreScrollRef.current = parsed.y;
         }
       }
+      if (lastTo === "listing") {
+        const fStr = sessionStorage.getItem("pp:index:filters");
+        if (fStr) {
+          try {
+            const f = JSON.parse(fStr);
+            if (f && typeof f === "object") restoreFiltersRef.current = f;
+          } catch {}
+        }
+      }
     } catch {}
     // Clear the marker so a fresh load doesn't mistakenly restore
     try { sessionStorage.removeItem("pp:lastTo"); } catch {}
+  }, []);
+
+  // Apply restored filters once on mount
+  useEffect(() => {
+    const f = restoreFiltersRef.current;
+    if (!f) return;
+    try {
+      if (typeof f.search === "string") setSearch(f.search);
+      if (typeof f.seller === "string") setSeller(f.seller);
+      if (typeof f.brand === "string") setBrand(f.brand);
+      if (typeof f.mold === "string") setMold(f.mold);
+      if (typeof f.minCondition === "string") setMinCondition(f.minCondition);
+      if (typeof f.maxCondition === "string") setMaxCondition(f.maxCondition);
+      if (typeof f.minPrice === "string") setMinPrice(f.minPrice);
+      if (typeof f.maxPrice === "string") setMaxPrice(f.maxPrice);
+      if (typeof f.minWeight === "string") setMinWeight(f.minWeight);
+      if (typeof f.maxWeight === "string") setMaxWeight(f.maxWeight);
+      if (typeof f.speedMin === "string") setSpeedMin(f.speedMin);
+      if (typeof f.speedMax === "string") setSpeedMax(f.speedMax);
+      if (typeof f.glideMin === "string") setGlideMin(f.glideMin);
+      if (typeof f.glideMax === "string") setGlideMax(f.glideMax);
+      if (typeof f.turnMin === "string") setTurnMin(f.turnMin);
+      if (typeof f.turnMax === "string") setTurnMax(f.turnMax);
+      if (typeof f.fadeMin === "string") setFadeMin(f.fadeMin);
+      if (typeof f.fadeMax === "string") setFadeMax(f.fadeMax);
+      if (typeof f.includePending === "boolean") setIncludePending(f.includePending);
+      if (typeof f.onlyGlow === "boolean") setOnlyGlow(f.onlyGlow);
+      if (typeof f.excludeInked === "boolean") setExcludeInked(f.excludeInked);
+      if (typeof f.typeDriver === "boolean") setTypeDriver(f.typeDriver);
+      if (typeof f.typeFairway === "boolean") setTypeFairway(f.typeFairway);
+      if (typeof f.typeMidrange === "boolean") setTypeMidrange(f.typeMidrange);
+      if (typeof f.typePutter === "boolean") setTypePutter(f.typePutter);
+    } finally {
+      restoreFiltersRef.current = null;
+    }
   }, []);
 
   // After discs load/render, attempt to restore scroll position
@@ -250,13 +295,42 @@ export default function Home() {
             "pp:index:scroll",
             JSON.stringify({ y: window.scrollY, ts: Date.now() })
           );
+          // Snapshot current filters
+          const filters = {
+            search,
+            seller,
+            brand,
+            mold,
+            minCondition,
+            maxCondition,
+            minPrice,
+            maxPrice,
+            minWeight,
+            maxWeight,
+            speedMin,
+            speedMax,
+            glideMin,
+            glideMax,
+            turnMin,
+            turnMax,
+            fadeMin,
+            fadeMax,
+            includePending,
+            onlyGlow,
+            excludeInked,
+            typeDriver,
+            typeFairway,
+            typeMidrange,
+            typePutter,
+          };
+          sessionStorage.setItem("pp:index:filters", JSON.stringify(filters));
           sessionStorage.setItem("pp:lastTo", "listing");
         } catch {}
       }
     };
     router.events.on("routeChangeStart", onStart);
     return () => router.events.off("routeChangeStart", onStart);
-  }, [router.events]);
+  }, [router.events, search, seller, brand, mold, minCondition, maxCondition, minPrice, maxPrice, minWeight, maxWeight, speedMin, speedMax, glideMin, glideMax, turnMin, turnMax, fadeMin, fadeMax, includePending, onlyGlow, excludeInked, typeDriver, typeFairway, typeMidrange, typePutter]);
 
   async function onInviteFriend() {
     const base =
