@@ -417,88 +417,63 @@ export default function EditListing({ initialUser, initialDisc }) {
               <div className="flightGrid">
                 <div className="flightField">
                   <span className="ffLabel">Speed</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={1}
-                    max={15}
+                  <select className="pp-input"
                     required
                     value={speed}
                     onChange={(e) => setSpeed(e.target.value)}
-                    inputMode="decimal"
-                    list="speedOptions"
-                  />
+                  >
+                    <option value="">Select</option>
+                    {speedOptions.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Glide</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={1}
-                    max={7}
+                  <select className="pp-input"
                     required
                     value={glide}
                     onChange={(e) => setGlide(e.target.value)}
-                    inputMode="decimal"
-                    list="glideOptions"
-                  />
+                  >
+                    <option value="">Select</option>
+                    {glideOptions.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Turn</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={-5}
-                    max={1}
+                  <select className="pp-input"
                     required
                     value={turn}
                     onChange={(e) => setTurn(e.target.value)}
                     onBlur={sanitizeTurn}
-                    inputMode="decimal"
-                    placeholder="e.g., -1"
-                    list="turnOptions"
-                  />
+                  >
+                    <option value="">Select</option>
+                    {turnOptions.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Fade</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={0}
-                    max={6}
+                  <select className="pp-input"
                     required
                     value={fade}
                     onChange={(e) => setFade(e.target.value)}
-                    inputMode="decimal"
-                    list="fadeOptions"
-                  />
+                  >
+                    <option value="">Select</option>
+                    {fadeOptions.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <p className="hintRow">
                 Use 0.5 increments. Example: 12 / 5 / -1 / 3
               </p>
 
-              {/* Datalists for optional dropdowns */}
-              <datalist id="speedOptions">
-                {speedOptions.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
-              <datalist id="glideOptions">
-                {glideOptions.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
-              <datalist id="turnOptions">
-                {turnOptions.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
-              <datalist id="fadeOptions">
-                {fadeOptions.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
+              {/* Replaced native datalists with selects for better mobile UX */}
             </div>
             {/* Plastic | Condition */}
             <div className="field">
@@ -514,32 +489,17 @@ export default function EditListing({ initialUser, initialDisc }) {
             </div>
             <div className="field">
               <label htmlFor="condition">Condition*</label>
-              <input
+              <select className="pp-input"
                 id="condition"
-                type="number"
-                min={1}
-                max={10}
-                step={1}
-                inputMode="numeric"
-                placeholder="e.g., 8"
                 required
                 value={conditionScore}
                 onChange={(e) => setConditionScore(e.target.value)}
-                onBlur={() => {
-                  setConditionScore((prev) => {
-                    if (prev === "") return prev;
-                    const n = Number(prev);
-                    if (!Number.isFinite(n)) return "";
-                    return String(Math.max(1, Math.min(10, Math.round(n))));
-                  });
-                }}
-                list="conditionOptions"
-              />
-              <datalist id="conditionOptions">
+              >
+                <option value="">Select</option>
                 {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
-                  <option key={v} value={v} />
+                  <option key={v} value={v}>{v}</option>
                 ))}
-              </datalist>
+              </select>
 
               <p className="hintRow">
                 Sleepy Scale (1–10): 1 = Extremely beat • 10 = Brand new
@@ -617,7 +577,7 @@ export default function EditListing({ initialUser, initialDisc }) {
             {/* Status */}
             <div className="field">
               <label htmlFor="status">Status</label>
-              <select
+              <select className="pp-input"
                 id="status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}

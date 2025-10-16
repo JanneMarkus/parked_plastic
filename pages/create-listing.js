@@ -304,91 +304,63 @@ export default function CreateListing({ user }) {
               <div className="flightGrid">
                 <div className="flightField">
                   <span className="ffLabel">Speed</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={1}
-                    max={15}
+                  <select className="pp-input"
                     required
                     value={speed}
                     onChange={(e) => setSpeed(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="e.g., 12"
-                    list="speedOptions"
-                  />
+                  >
+                    <option value="">Select</option>
+                    {speedOptions.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Glide</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={1}
-                    max={7}
+                  <select className="pp-input"
                     required
                     value={glide}
                     onChange={(e) => setGlide(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="e.g., 5"
-                    list="glideOptions"
-                  />
+                  >
+                    <option value="">Select</option>
+                    {glideOptions.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Turn</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={-5}
-                    max={1}
+                  <select className="pp-input"
                     required
                     value={turn}
                     onChange={(e) => setTurn(e.target.value)}
                     onBlur={sanitizeTurn}
-                    inputMode="decimal"
-                    placeholder="e.g., -1"
-                    list="turnOptions"
-                  />
+                  >
+                    <option value="">Select</option>
+                    {turnOptions.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flightField">
                   <span className="ffLabel">Fade</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min={0}
-                    max={6}
+                  <select className="pp-input"
                     required
                     value={fade}
                     onChange={(e) => setFade(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="e.g., 3"
-                    list="fadeOptions"
-                  />
+                  >
+                    <option value="">Select</option>
+                    {fadeOptions.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <p className="hintRow">
                 Use 0.5 increments. Example format: 12 / 5 / -1 / 3
               </p>
 
-              {/* Datalists for optional dropdowns */}
-              <datalist id="speedOptions">
-                {speedOptions.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
-              <datalist id="glideOptions">
-                {glideOptions.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
-              <datalist id="turnOptions">
-                {turnOptions.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
-              <datalist id="fadeOptions">
-                {fadeOptions.map((v) => (
-                  <option key={v} value={v} />
-                ))}
-              </datalist>
+              {/* Replaced native datalists with selects for better mobile UX */}
             </div>
 
             {/* Plastic | Condition */}
@@ -405,32 +377,17 @@ export default function CreateListing({ user }) {
             </div>
             <div className="field">
               <label htmlFor="condition">Condition*</label>
-              <input
+              <select className="pp-input"
                 id="condition"
-                type="number"
-                min={1}
-                max={10}
-                step={1}
-                inputMode="numeric"
-                placeholder="e.g., 8"
                 required
                 value={conditionScore}
                 onChange={(e) => setConditionScore(e.target.value)}
-                onBlur={() => {
-                  setConditionScore((prev) => {
-                    if (prev === "") return prev;
-                    const n = Number(prev);
-                    if (!Number.isFinite(n)) return "";
-                    return String(Math.max(1, Math.min(10, Math.round(n))));
-                  });
-                }}
-                list="conditionOptions"
-              />
-              <datalist id="conditionOptions">
+              >
+                <option value="">Select</option>
                 {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => (
-                  <option key={v} value={v} />
+                  <option key={v} value={v}>{v}</option>
                 ))}
-              </datalist>
+              </select>
 
               <p className="hintRow">
                 Sleepy Scale (1–10): 1 = Extremely beat • 10 = Brand new
@@ -555,7 +512,7 @@ const styles = `
   .span2 { grid-column: 1 / -1; }
   .field label { display: block; font-family: 'Poppins', sans-serif; font-weight: 600; color: var(--storm); font-size: .95rem; margin-bottom: 6px; }
   .hint { font-weight: 500; color: #666; font-size: .8rem; margin-left: 6px; }
-  .field input:not([type="file"]), .field textarea { width: 100%; box-sizing: border-box; background: #fff; border: 1px solid var(--cloud); border-radius: 10px; padding: 12px 14px; font-size: 15px; color: var(--char); outline: none; transition: border-color .15s, box-shadow .15s; }
+  \.field input:not([type="file"]), .field textarea, .field select { width: 100%; box-sizing: border-box; background: #fff; border: 1px solid var(--cloud); border-radius: 10px; padding: 12px 14px; font-size: 15px; color: var(--char); outline: none; transition: border-color .15s, box-shadow .15s; }
   .field textarea { resize: vertical; min-height: 120px; }
   .field input:not([type="file"]):focus, .field textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 4px var(--tint); }
   .hintRow { color: #666; font-size: .85rem; margin-top: 6px; }
