@@ -7,7 +7,17 @@ const defaults = { httpOnly: true, sameSite: "lax", path: "/" };
 export async function updateSession(request) {
   const res = NextResponse.next();
   const secure = process.env.NODE_ENV === "production";
-  const domain = secure ? ".parkedplastic.com" : undefined; // <- match server adapter
+
+  // Compute cookie domain consistently with utils/supabase/server.js
+  const xfHost = (request.headers.get("x-forwarded-host") || "").split(",")[0].trim();
+  const rawHost = xfHost || request.headers.get("host") || "";
+  const host = rawHost.split(":")[0];
+  const rootDomain =
+    host.endsWith(".parkedplastic.com") || host === "parkedplastic.com"
+      ? ".parkedplastic.com"
+      : undefined;
+  const FALLBACK_DOMAIN = process.env.AUTH_COOKIE_DOMAIN; // optional override
+  const domain = secure && (rootDomain || FALLBACK_DOMAIN) ? (rootDomain || FALLBACK_DOMAIN) : undefined;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -19,7 +29,7 @@ export async function updateSession(request) {
           return request.cookies.get(name)?.value;
         },
         set(name, value, options) {
-          res.cookies.set({ name, value, ...defaults, secure, domain, ...options });
+          res.cookies.set({ name, value, ...defaults, secure, ...(domain ? { domain } : {}), ...options });
         },
         remove(name, options) {
           res.cookies.set({
@@ -28,7 +38,7 @@ export async function updateSession(request) {
             maxAge: 0,
             ...defaults,
             secure,
-            domain,
+            ...(domain ? { domain } : {}),
             ...options,
           });
         },

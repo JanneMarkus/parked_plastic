@@ -61,6 +61,10 @@ useEffect(() => {
           });
       } else {
         setProfile({ full_name: null, avatar_url: null });
+        try {
+          const { data: s } = await supabase.auth.getSession();
+          if (s?.session) await supabase.auth.signOut({ scope: "local" });
+        } catch {}
       }
     } catch {
       if (alive) {
